@@ -8,10 +8,15 @@
 #endif //XV6_RISCV_ASSIGNMENT2_LINKED_LIST_H
 
 struct node {
-    uint32 next_node_index; //instead of pointers, we can use index of the node in the proc[] array
-    struct proc *proc;
+    struct node *next; //instead of pointers, we can use index of the node in the proc[] array
+    uint proc_index;
 };
+struct node init_node(uint proc_index);
 
 struct list {
     struct node *head;
 };
+struct list init_linked_list();
+void add(struct list ls, struct node node);
+uint remove(struct list ls, struct node node);
+uint pop(struct list ls);
