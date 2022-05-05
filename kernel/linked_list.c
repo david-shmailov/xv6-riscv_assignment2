@@ -22,12 +22,19 @@ void add(struct list ls, struct node node){
     while(curr.next != NULL){
         curr = curr.next;
     }
+    // todo pseudo code
+    proc[node.proc_index].acquire()
     curr.next = node;
+    proc[node.proc_index].release()
 }
 
 uint pop(struct list ls){
     struct node curr = ls.head;
+    // todo pseudo code
+    proc[curr.proc_index].acquire()
     ls.head = curr.next;
+    proc[curr.proc_index].release()
+
     return curr.proc_index;
 }
 uint remove(struct list ls, struct node node){
