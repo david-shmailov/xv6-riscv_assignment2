@@ -14,7 +14,7 @@
 struct list init_linked_list(struct spinlock lock){
     struct list ls;
     struct node first_node;
-    first_node.proc_index=-1;
+    first_node.proc_index=100;
     first_node.next =NULL;
     ls.head = first_node;
     ls.first_lock =lock;
@@ -32,12 +32,13 @@ void add(struct list ls, struct node node){
 }
 
 uint pop(struct list ls){
-    struct node curr = ls.head;
-
+    struct node pred = ls.head;
+    acquire(ls.first_lock);
+    struct node curr = pred.next;
     acquire(&porc[curr.proc_index]->lock_linked_list);
     ls.head = curr.next;
+    release(ls.first_lock);
     release(&porc[curr.proc_index]->lock_linked_list);
-
     return curr.proc_index;
 }
 void remove(struct list ls, struct node node){
@@ -47,13 +48,23 @@ void remove(struct list ls, struct node node){
     struct node curr = pred.next;
     acquire(&porc[curr.proc_index]->lock_linked_list);
     while(curr.proc_index != node.proc_index){
-        release(&porc[pred.proc_index]->lock_linked_list);
+        if(flag == 0){
+            release(ls.first_lock);
+            flag++;
+        }
+        else
+            release(&porc[pred.proc_index]->lock_linked_list);
         pred = curr;
         curr = curr.next;
         acquire(&porc[curr.proc_index]->lock_linked_list);
     }
     pred.next = curr.next;
-    release(&porc[pred.proc_index]->lock_linked_list);
+    if(flag == 0){
+        release(ls.first_lock);
+        flag++;
+    }
+    else
+        release(&porc[pred.proc_index]->lock_linked_list);
     release(&porc[curr.proc_index]->lock_linked_list);
 }
 

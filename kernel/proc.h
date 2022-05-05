@@ -107,3 +107,13 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 };
+
+struct node {
+    struct node next; //instead of pointers, we can use index of the node in the proc[] array
+    uint proc_index;
+};
+
+struct list {
+    struct node head;
+    struct spinlock first_lock;
+};
