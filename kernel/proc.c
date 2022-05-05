@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include <stddef.h>
 
 struct cpu cpus[NCPU];
 
@@ -13,14 +14,13 @@ struct proc proc[NPROC];
 struct proc *initproc;
 
 struct spinlock unused;
-struct list ls_unused = init_linked_list(unused);
+struct list ls_unused ;
 struct spinlock zombie;
-struct list ls_zombie = init_linked_list(zombie);
+struct list ls_zombie;
 struct spinlock sleeping;
-struct list ls_sleeping = init_linked_list(sleeping);
+struct list ls_sleeping;
 struct spinlock ready_cpu[NCPU];
 struct list ls_ready_cpu[NCPU];
-for(int i=0; i<NCPU; i++) ls_ready_cpu[i]= init_linked_list(ready_cpu[i]);
 
 
 int num_of_cpus= 3;
@@ -61,10 +61,13 @@ void
 procinit(void)
 {
   struct proc *p;
-  
+  ls_unused = init_linked_list(unused);
+  ls_zombie = init_linked_list(zombie);
+  ls_sleeping = init_linked_list(sleeping);
+  for(int i=0; i<NCPU; i++) ls_ready_cpu[i]= init_linked_list(ready_cpu[i]);
+
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
-  int i =0;
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->kstack = KSTACK((int) (p - proc));
@@ -125,7 +128,7 @@ allocproc(void)
   do {
       index_proc = pop(ls_unused);
   }while(index_proc > NPROC);
-
+    p = &proc[index_proc];
     acquire(&p->lock);
     if(p->state == UNUSED) {
       goto found;
@@ -250,7 +253,7 @@ userinit(void)
   struct proc *p;
 
   p = allocproc();
-  p->cpus_affiliated = allocate_proc_to_cpu();
+  p->cpus_affiliated = cpuid();
   p->curr_proc_node->next =NULL;
   add(ls_ready_cpu[p->cpus_affiliated], *p->curr_proc_node);
 
@@ -477,7 +480,7 @@ scheduler(void)
     do {
         proc_index = pop(ls_ready_cpu[cpuid()]);
     }while (proc_index > NPROC);
-    p = proc[proc_index];
+    p = &proc[proc_index];
     acquire(&p->lock);
     // Switch to chosen process.  It is the process's job
     // to release its lock and then reacquire it
@@ -487,8 +490,6 @@ scheduler(void)
     swtch(&c->context, &p->context);
     // Process is done running for now.
     // It should have changed its p->state before coming back.
-    p->curr_proc_node->next=NULL;
-    add(ls_ready_cpu[p->cpus_affiliated], *p->curr_proc_node);
     c->proc = 0;
     release(&p->lock);
   }
@@ -596,11 +597,11 @@ wakeup(void *chan)
   struct proc *p;
   uint index;
   do {
-      index_proc = pop(ls_sleeping);
-  } while(index_proc > NPROC);
-  p = proc[index];
+      index = pop(ls_sleeping);
+  } while(index > NPROC);
+  p = &proc[index];
   if(p != myproc()){
-      cquire(&p->lock);
+      acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
           p->state = RUNNABLE;
           p->curr_proc_node->next= NULL;
@@ -643,8 +644,7 @@ set_cpu(int cpu_num){
         acquire(&p->lock);
         p->cpus_affiliated = cpu_num;
         release(&p->lock);
-        yield()
-        // todo will it return from yield?
+        yield();
         return cpu_num;
     }else{
         return -1;
@@ -653,7 +653,6 @@ set_cpu(int cpu_num){
 
 int
 get_cpu(){
-    //todo any reason this could fail?
     struct proc *p = myproc();
     acquire(&p->lock);
     int cpu_num = p->cpus_affiliated;
@@ -748,48 +747,48 @@ struct list init_linked_list(struct spinlock lock){
 void add(struct list ls, struct node node){
     struct node curr = ls.head;
     while(curr.next != NULL){
-        curr = curr.next;
+        curr = *curr.next;
     }
-    acquire(&porc[curr.proc_index]->lock_linked_list);
-    curr.next = node;
-    release(&porc[curr.proc_index]->lock_linked_list);
+    acquire(&proc[curr.proc_index].lock_linked_list);
+    curr.next = &node;
+    release(&proc[curr.proc_index].lock_linked_list);
 }
 
 uint pop(struct list ls){
     struct node pred = ls.head;
-    acquire(ls.first_lock);
-    struct node curr = pred.next;
-    acquire(&porc[curr.proc_index]->lock_linked_list);
-    ls.head = curr.next;
-    release(ls.first_lock);
-    release(&porc[curr.proc_index]->lock_linked_list);
+    acquire(&ls.first_lock);
+    struct node curr = *pred.next;
+    acquire(&proc[curr.proc_index].lock_linked_list);
+    ls.head = *curr.next;
+    release(&ls.first_lock);
+    release(&proc[curr.proc_index].lock_linked_list);
     return curr.proc_index;
 }
 void remove(struct list ls, struct node node){
     struct node pred = ls.head;
     int flag = 0;
-    acquire(ls.first_lock);
-    struct node curr = pred.next;
-    acquire(&porc[curr.proc_index]->lock_linked_list);
+    acquire(&ls.first_lock);
+    struct node curr = *pred.next;
+    acquire(&proc[curr.proc_index].lock_linked_list);
     while(curr.proc_index != node.proc_index){
         if(flag == 0){
-            release(ls.first_lock);
+            release(&ls.first_lock);
             flag++;
         }
         else
-            release(&porc[pred.proc_index]->lock_linked_list);
+            release(&proc[pred.proc_index].lock_linked_list);
         pred = curr;
-        curr = curr.next;
-        acquire(&porc[curr.proc_index]->lock_linked_list);
+        curr = *curr.next;
+        acquire(&proc[curr.proc_index].lock_linked_list);
     }
     pred.next = curr.next;
     if(flag == 0){
-        release(ls.first_lock);
+        release(&ls.first_lock);
         flag++;
     }
     else
-        release(&porc[pred.proc_index]->lock_linked_list);
-    release(&porc[curr.proc_index]->lock_linked_list);
+        release(&proc[pred.proc_index].lock_linked_list);
+    release(&proc[curr.proc_index].lock_linked_list);
 }
 
 int allocate_proc_to_cpu(){
