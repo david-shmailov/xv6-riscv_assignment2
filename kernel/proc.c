@@ -12,8 +12,22 @@ struct proc proc[NPROC];
 
 struct proc *initproc;
 
+struct spinlock unused;
+struct list ls_unused = init_linked_list(unused);
+struct spinlock zombie;
+struct list ls_zombie = init_linked_list(zombie);
+struct spinlock sleeping;
+struct list ls_sleeping = init_linked_list(sleeping);
+struct spinlock ready_cpu0;
+struct list ls_ready_cpu0 = init_linked_list(ready_cpu0);
+struct spinlock ready_cpu1;
+struct list ls_ready_cpu1 = init_linked_list(ready_cpu1);
+struct spinlock ready_cpu2;
+struct list ls_ready_cpu2 = init_linked_list(ready_cpu2);
+
 int nextpid = 1;
 struct spinlock pid_lock;
+int next_cpu =0 ;
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
@@ -51,9 +65,16 @@ procinit(void)
   
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
+  int i =0;
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->kstack = KSTACK((int) (p - proc));
+      p->index_in_proc =i;
+      i++;
+      struct node unused_node;
+      unused_node.proc_index= p->index_in_proc;
+      unused_node.next = NULL;
+      add(ls_unused, unused_node);
   }
 }
 
@@ -438,28 +459,67 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-  
+//     if(cpuid() == 0){
+//         int cont =0;
+//         for(uint i = 0; i < NPROC; i++) {
+//             acquire(&proc[i]->lock);
+//             proc[i].index_in_proc = i;
+//             if(proc[i]->state == RUNNABLE) {
+//                if(cont % 3 == 0){
+//                    proc[i]->cpus_affiliated =0;
+//                    struct node add_node;
+//                    add_node.next = NULL;
+//                    add_node.proc_index = i;
+//                    add(ls_ready_cpu0,add_node );
+//                }
+//                 if(cont % 3 == 1){
+//                     proc[i]->cpus_affiliated =1;
+//                     struct node add_node;
+//                     add_node.next = NULL;
+//                     add_node.proc_index = i;
+//                     add(ready_cpu1,add_node );
+//                 }
+//                 if(cont % 3 == 2){
+//                     proc[i]->cpus_affiliated =2;
+//                     struct node add_node;
+//                     add_node.next = NULL;
+//                     add_node.proc_index = i;
+//                     add(ready_cpu2,add_node );
+//                 }
+//                 cont++;
+//                }
+//             release(&proc[i]->lock);
+//             }
+//     }
+
   c->proc = 0;
+  uint proc_index;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-      }
-      release(&p->lock);
-    }
+    do {
+        if (cpuid() == 0) proc_index = pop(ls_ready_cpu0);
+        if (cpuid() == 1) proc_index = pop(ls_ready_cpu1);
+        if (cpuid() == 2) proc_index = pop(ls_ready_cpu2);
+    }while (proc_index > NPROC);
+    p = proc[proc_index];
+    acquire(&p->lock);
+    // Switch to chosen process.  It is the process's job
+    // to release its lock and then reacquire it
+    // before jumping back to us.
+    p->state = RUNNING;
+    c->proc = p;
+    swtch(&c->context, &p->context);
+    // Process is done running for now.
+    // It should have changed its p->state before coming back.
+    struct node new_node;
+    new_node.proc_index = proc_index;
+    new_node.next = NULL;
+    if(p->cpus_affiliated == 0) add(ls_ready_cpu0, new_node);
+    if(p->cpus_affiliated == 1) add(ls_ready_cpu1, new_node);
+    if(p->cpus_affiliated == 2) add(ls_ready_cpu2, new_node);
+    c->proc = 0;
+    release(&p->lock);
   }
 }
 
@@ -542,6 +602,10 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  struct node sleeping_node;
+  sleeping_node.proc_index = p->index_in_proc;
+  sleeping_node.next =NULL;
+  add(ls_sleeping, sleeping_node);
 
   sched();
 
@@ -559,17 +623,23 @@ void
 wakeup(void *chan)
 {
   struct proc *p;
-
-  for(p = proc; p < &proc[NPROC]; p++) {
-    if(p != myproc()){
-      acquire(&p->lock);
+  uint index = pop(ls_sleeping);
+  p = proc[index];
+  if(p != myproc()){
+      cquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
-        p->state = RUNNABLE;
+          p->state = RUNNABLE;
+          struct node ready_node;
+          ready_node.proc_index = p->index_in_proc;
+          ready_node.next = NULL;
+          if(p->cpus_affiliated == 0) add(ls_ready_cpu0, ready_node);
+          if(p->cpus_affiliated == 1) add(ls_ready_cpu1, ready_node);
+          if(p->cpus_affiliated == 2) add(ls_ready_cpu2, ready_node);
       }
       release(&p->lock);
     }
   }
-}
+
 
 // Kill the process with the given pid.
 // The victim won't exit until it tries to return
@@ -668,7 +738,7 @@ struct node init_node(uint proc_index){
 struct list init_linked_list(struct spinlock lock){
     struct list ls;
     struct node first_node;
-    first_node.proc_index=100;
+    first_node.proc_index= NPROC+1;
     first_node.next =NULL;
     ls.head = first_node;
     ls.first_lock =lock;
@@ -722,3 +792,6 @@ void remove(struct list ls, struct node node){
     release(&porc[curr.proc_index]->lock_linked_list);
 }
 
+int next_cpu(){
+
+}
