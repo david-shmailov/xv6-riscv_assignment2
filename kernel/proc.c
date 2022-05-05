@@ -18,13 +18,12 @@ struct spinlock zombie;
 struct list ls_zombie = init_linked_list(zombie);
 struct spinlock sleeping;
 struct list ls_sleeping = init_linked_list(sleeping);
-struct spinlock ready_cpu0;
-struct list ls_ready_cpu0 = init_linked_list(ready_cpu0);
-struct spinlock ready_cpu1;
-struct list ls_ready_cpu1 = init_linked_list(ready_cpu1);
-struct spinlock ready_cpu2;
-struct list ls_ready_cpu2 = init_linked_list(ready_cpu2);
+struct spinlock ready_cpu[NCPU];
+struct list ls_ready_cpu[NCPU];
+for(int i=0; i<NCPU; i++) ls_ready_cpu[i]= init_linked_list(ready_cpu[i]);
 
+
+int num_of_cpus= 3;
 int nextpid = 1;
 struct spinlock pid_lock;
 int next_cpu =0 ;
@@ -69,10 +68,8 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->kstack = KSTACK((int) (p - proc));
-      p->index_in_proc =i;
-      i++;
       struct node unused_node;
-      unused_node.proc_index= p->index_in_proc;
+      unused_node.proc_index= p->pid;
       unused_node.next = NULL;
       add(ls_unused, unused_node);
   }
@@ -125,15 +122,17 @@ static struct proc*
 allocproc(void)
 {
   struct proc *p;
+  uint index_proc;
+  do {
+      index_proc = pop(ls_unused);
+  }while(index_proc > NPROC);
 
-  for(p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
     if(p->state == UNUSED) {
       goto found;
     } else {
       release(&p->lock);
     }
-  }
   return 0;
 
 found:
@@ -253,6 +252,12 @@ userinit(void)
   struct proc *p;
 
   p = allocproc();
+  p->cpus_affiliated = allocate_proc_to_cpu();
+  struct node first_node;
+  first_node.proc_index = p->pid;
+  first_node.next = NULL;
+  add(ls_ready_cpu[p->cpus_affiliated], first_node);
+
   initproc = p;
   
   // allocate one user page and copy init's instructions
@@ -338,6 +343,11 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  np->cpus_affiliated = p->cpus_affiliated;
+  struct node fork_node;
+  fork_node.proc_index = p->pid;
+  fork_node.next = NULL;
+  add(ls_ready_cpu[p->cpus_affiliated], fork_node);
   release(&np->lock);
 
   return pid;
@@ -466,48 +476,13 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-//     if(cpuid() == 0){
-//         int cont =0;
-//         for(uint i = 0; i < NPROC; i++) {
-//             acquire(&proc[i]->lock);
-//             proc[i].index_in_proc = i;
-//             if(proc[i]->state == RUNNABLE) {
-//                if(cont % 3 == 0){
-//                    proc[i]->cpus_affiliated =0;
-//                    struct node add_node;
-//                    add_node.next = NULL;
-//                    add_node.proc_index = i;
-//                    add(ls_ready_cpu0,add_node );
-//                }
-//                 if(cont % 3 == 1){
-//                     proc[i]->cpus_affiliated =1;
-//                     struct node add_node;
-//                     add_node.next = NULL;
-//                     add_node.proc_index = i;
-//                     add(ready_cpu1,add_node );
-//                 }
-//                 if(cont % 3 == 2){
-//                     proc[i]->cpus_affiliated =2;
-//                     struct node add_node;
-//                     add_node.next = NULL;
-//                     add_node.proc_index = i;
-//                     add(ready_cpu2,add_node );
-//                 }
-//                 cont++;
-//                }
-//             release(&proc[i]->lock);
-//             }
-//     }
-
   c->proc = 0;
   uint proc_index;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
     do {
-        if (cpuid() == 0) proc_index = pop(ls_ready_cpu0);
-        if (cpuid() == 1) proc_index = pop(ls_ready_cpu1);
-        if (cpuid() == 2) proc_index = pop(ls_ready_cpu2);
+        proc_index = pop(ls_ready_cpu[cpuid()]);
     }while (proc_index > NPROC);
     p = proc[proc_index];
     acquire(&p->lock);
@@ -522,9 +497,7 @@ scheduler(void)
     struct node new_node;
     new_node.proc_index = proc_index;
     new_node.next = NULL;
-    if(p->cpus_affiliated == 0) add(ls_ready_cpu0, new_node);
-    if(p->cpus_affiliated == 1) add(ls_ready_cpu1, new_node);
-    if(p->cpus_affiliated == 2) add(ls_ready_cpu2, new_node);
+    add(ls_ready_cpu[p->cpus_affiliated], new_node);
     c->proc = 0;
     release(&p->lock);
   }
@@ -564,6 +537,10 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  struct node ready_node;
+  ready_node.proc_index = p->pid;
+  ready_node.next = NULL;
+  add(ls_ready_cpu[p->cpus_affiliated], ready_node);
   sched();
   release(&p->lock);
 }
@@ -610,7 +587,7 @@ sleep(void *chan, struct spinlock *lk)
   p->chan = chan;
   p->state = SLEEPING;
   struct node sleeping_node;
-  sleeping_node.proc_index = p->index_in_proc;
+  sleeping_node.proc_index = p->pid;
   sleeping_node.next =NULL;
   add(ls_sleeping, sleeping_node);
 
@@ -637,11 +614,9 @@ wakeup(void *chan)
       if(p->state == SLEEPING && p->chan == chan) {
           p->state = RUNNABLE;
           struct node ready_node;
-          ready_node.proc_index = p->index_in_proc;
+          ready_node.proc_index = p->pid;
           ready_node.next = NULL;
-          if(p->cpus_affiliated == 0) add(ls_ready_cpu0, ready_node);
-          if(p->cpus_affiliated == 1) add(ls_ready_cpu1, ready_node);
-          if(p->cpus_affiliated == 2) add(ls_ready_cpu2, ready_node);
+          add(ls_ready_cpu[p->cpus_affiliated], ready_node);
       }
       release(&p->lock);
     }
@@ -799,6 +774,8 @@ void remove(struct list ls, struct node node){
     release(&porc[curr.proc_index]->lock_linked_list);
 }
 
-int next_cpu(){
-
+int allocate_proc_to_cpu(){
+    int tmp = next_cpu;
+    next_cpu = (next_cpu+1) % num_of_cpus;
+    return tmp;
 }
