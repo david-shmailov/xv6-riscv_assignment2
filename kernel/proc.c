@@ -71,9 +71,9 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->kstack = KSTACK((int) (p - proc));
-      p->curr_proc_node->proc_index= p->pid;
-      p->curr_proc_node->next = NULL;
-      add(ls_unused, *p->curr_proc_node);
+      p->curr_proc_node.proc_index= p->pid;
+      p->curr_proc_node.next = NULL;
+      add(ls_unused,  p->curr_proc_node);
   }
 }
 
@@ -171,9 +171,9 @@ found:
 static void
 freeproc(struct proc *p)
 {
-    remove(ls_zombie,*p->curr_proc_node);
-    p->curr_proc_node->next=NULL;
-    add(ls_unused,*p->curr_proc_node);
+    remove(ls_zombie, p->curr_proc_node);
+    p->curr_proc_node.next=NULL;
+    add(ls_unused,p->curr_proc_node);
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -254,8 +254,8 @@ userinit(void)
 
   p = allocproc();
   p->cpus_affiliated = cpuid();
-  p->curr_proc_node->next =NULL;
-  add(ls_ready_cpu[p->cpus_affiliated], *p->curr_proc_node);
+  p->curr_proc_node.next =NULL;
+  add(ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
 
   initproc = p;
   
@@ -343,8 +343,8 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   np->cpus_affiliated = p->cpus_affiliated;
-  np->curr_proc_node->next=NULL;
-  add(ls_ready_cpu[p->cpus_affiliated], *np->curr_proc_node);
+  np->curr_proc_node.next=NULL;
+  add(ls_ready_cpu[p->cpus_affiliated], np->curr_proc_node);
   release(&np->lock);
 
   return pid;
@@ -399,8 +399,8 @@ exit(int status)
   wakeup(p->parent);
 
   acquire(&p->lock);
-  p->curr_proc_node->next=NULL;
-  add(ls_zombie, *p->curr_proc_node);
+  p->curr_proc_node.next=NULL;
+  add(ls_zombie, p->curr_proc_node);
   p->xstate = status;
   p->state = ZOMBIE;
 
@@ -479,6 +479,7 @@ scheduler(void)
     intr_on();
     do {
         proc_index = pop(ls_ready_cpu[cpuid()]);
+        printf("index is :%d", proc_index);
     }while (proc_index > NPROC);
     p = &proc[proc_index];
     acquire(&p->lock);
@@ -529,8 +530,8 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
-  p->curr_proc_node->next=NULL;
-  add(ls_ready_cpu[p->cpus_affiliated], *p->curr_proc_node);
+  p->curr_proc_node.next=NULL;
+  add(ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
   sched();
   release(&p->lock);
 }
@@ -576,8 +577,8 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
-  p->curr_proc_node->next =NULL;
-  add(ls_sleeping, *p->curr_proc_node);
+  p->curr_proc_node.next =NULL;
+  add(ls_sleeping, p->curr_proc_node);
 
   sched();
 
@@ -604,8 +605,8 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
           p->state = RUNNABLE;
-          p->curr_proc_node->next= NULL;
-          add(ls_ready_cpu[p->cpus_affiliated], *p->curr_proc_node);
+          p->curr_proc_node.next= NULL;
+          add(ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
       }
       release(&p->lock);
     }

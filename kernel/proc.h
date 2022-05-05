@@ -112,7 +112,7 @@ struct proc {
   char name[16];               // Process name (debugging)
   int cpus_affiliated;
   int index_in_proc;
-  struct node *curr_proc_node;
+  struct node curr_proc_node;
 };
 
 struct list {
