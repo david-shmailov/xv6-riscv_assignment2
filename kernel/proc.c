@@ -92,6 +92,7 @@ allocpid() {
   do{
       pid = nextpid;
   } while(cas(&nextpid, pid, pid+1));
+
   return pid;
 }
 
