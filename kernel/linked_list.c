@@ -1,7 +1,7 @@
 //
 // Created by David on 05/05/2022.
 //
-
+#include "spinlock.h"
 #include "linked_list.h"
 
 sleeping_ls = init_linked_list()
@@ -48,7 +48,19 @@ uint pop(struct list ls){
 
     return curr.proc_index;
 }
-uint remove(struct list ls, struct node node){
-
+void remove(struct list ls, struct node node){
+    struct node pred = ls.head;
+    acquire(&porc[pred.proc_index]->lock_linked_list);
+    struct node curr = pred.next;
+    acquire(&porc[curr.proc_index]->lock_linked_list);
+    while(curr.proc_index != node.proc_index){
+        release(&porc[pred.proc_index]->lock_linked_list);
+        pred = curr;
+        curr = curr.next;
+        acquire(&porc[curr.proc_index]->lock_linked_list);
+    }
+    pred.next = curr.next;
+    release(&porc[pred.proc_index]->lock_linked_list);
+    release(&porc[curr.proc_index]->lock_linked_list);
 }
 
