@@ -14,9 +14,13 @@
 int
 main(int argc, char *argv[])
 {
-    for(int i=0; i<3; i++){
+    int pids[16] ={0};
+    for(int i=0; i<5; i++){
         int pid = fork();
-        printf("pid : %d \n", pid);
+        if( pid != 0) pids[pid] +=1;
+    }
+    for(int i=0; i<16; i++){
+        if(pids[i]>1) printf("duplicate pid");
     }
     return 0;
 }
