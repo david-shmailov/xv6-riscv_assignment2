@@ -11,7 +11,6 @@ struct node {
     struct node next; //instead of pointers, we can use index of the node in the proc[] array
     uint proc_index;
 };
-struct node init_node(uint proc_index);
 
 struct list {
     struct node head;
