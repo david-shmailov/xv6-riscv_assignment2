@@ -634,6 +634,36 @@ kill(int pid)
   }
   return -1;
 }
+// move a process to a different cpu
+// returns the cpu number if successful or negative number if fails
+int
+set_cpu(int cpu_num){
+    if ( 0 < cpu_num && cpu_num<NCPU) {
+        struct proc *p = myproc();
+        acquire(&p->lock);
+        p->cpus_affiliated = cpu_num;
+        release(&p->lock);
+        yield()
+        // todo will it return from yield?
+        return cpu_num;
+    }else{
+        return -1;
+    }
+}
+
+int
+get_cpu(){
+    //todo any reason this could fail?
+    struct proc *p = myproc();
+    acquire(&p->lock);
+    int cpu_num = p->cpus_affiliated;
+    release(&p->lock);
+    return cpu_num;
+}
+
+
+
+
 
 // Copy to either a user address, or kernel address,
 // depending on usr_dst.

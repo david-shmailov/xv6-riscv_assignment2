@@ -83,6 +83,20 @@ sys_kill(void)
   return kill(pid);
 }
 
+uint64
+sys_set_cpu(void)
+{
+    int cpu_num;
+    if(argint(0, &cpu_num) <0)
+        return -1;
+    return set_cpu(cpu_num);
+}
+
+uint64
+sys_get_cpu(void)
+{
+    return get_cpu();
+}
 // return how many clock tick interrupts have occurred
 // since start.
 uint64
