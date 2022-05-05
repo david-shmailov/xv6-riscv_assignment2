@@ -18,5 +18,5 @@ struct list {
 };
 struct list init_linked_list();
 void add(struct list ls, struct node node);
-uint remove(struct list ls, struct node node);
+void remove(struct list ls, struct node node);
 uint pop(struct list ls);

@@ -30,7 +30,11 @@ uint pop(struct list ls){
     ls.head = curr.next;
     return curr.proc_index;
 }
-uint remove(struct list ls, struct node node){
-
+void remove(struct list ls, struct node node){
+    struct node curr = ls.head;
+    while(curr.next.proc_index != node.proc_index){
+        curr = curr.next;
+    }
+    curr.next = node.next;
 }
 
