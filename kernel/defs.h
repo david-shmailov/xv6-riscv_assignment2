@@ -8,6 +8,8 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct node;
+struct list;
 
 // bio.c
 void            binit(void);
@@ -108,7 +110,7 @@ struct list     init_linked_list(struct spinlock lock);
 void            add(struct list ls, struct node node);
 uint            pop(struct list ls);
 void            remove(struct list ls, struct node node);
-int             allocate_proc_to_cpu()
+int             allocate_proc_to_cpu();
 
 
 

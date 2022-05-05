@@ -81,7 +81,7 @@ struct trapframe {
 };
 
 struct node {
-    struct node next; //instead of pointers, we can use index of the node in the proc[] array
+    struct node * next; //instead of pointers, we can use index of the node in the proc[] array
     uint proc_index;
 };
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
