@@ -170,6 +170,10 @@ found:
 static void
 freeproc(struct proc *p)
 {
+    struct node zombie_node;
+    zombie_node.proc_index = p->pid;
+    remove(ls_zombie,zombie_node);
+    add(ls_unused,zombie_node);
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -184,6 +188,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+
 }
 
 // Create a user page table for a given process,
@@ -385,9 +390,11 @@ exit(int status)
 
   // Parent might be sleeping in wait().
   wakeup(p->parent);
-  
-  acquire(&p->lock);
 
+  struct node *zombie_proc;
+  acquire(&p->lock);
+  zombie_proc->proc_index = &p->pid;
+  add(ls_zombie, zombie_proc);
   p->xstate = status;
   p->state = ZOMBIE;
 
