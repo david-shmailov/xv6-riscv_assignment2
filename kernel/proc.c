@@ -68,10 +68,9 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->kstack = KSTACK((int) (p - proc));
-      struct node unused_node;
-      unused_node.proc_index= p->pid;
-      unused_node.next = NULL;
-      add(ls_unused, unused_node);
+      p->curr_proc_node->proc_index= p->pid;
+      p->curr_proc_node->next = NULL;
+      add(ls_unused, &p->curr_proc_node);
   }
 }
 
@@ -169,7 +168,6 @@ found:
 static void
 freeproc(struct proc *p)
 {
-    struct node zombie_node;
     zombie_node.proc_index = p->pid;
     remove(ls_zombie,zombie_node);
     add(ls_unused,zombie_node);
@@ -253,9 +251,7 @@ userinit(void)
 
   p = allocproc();
   p->cpus_affiliated = allocate_proc_to_cpu();
-  struct node first_node;
-  first_node.proc_index = p->pid;
-  first_node.next = NULL;
+  p->curr_proc_node->next =NULL;
   add(ls_ready_cpu[p->cpus_affiliated], first_node);
 
   initproc = p;
@@ -403,7 +399,7 @@ exit(int status)
 
   struct node *zombie_proc;
   acquire(&p->lock);
-  zombie_proc->proc_index = &p->pid;
+  zombie_proc->proc_index = p->pid;
   add(ls_zombie, zombie_proc);
   p->xstate = status;
   p->state = ZOMBIE;
@@ -607,7 +603,10 @@ void
 wakeup(void *chan)
 {
   struct proc *p;
-  uint index = pop(ls_sleeping);
+  uint index;
+  do {
+      index_proc = pop(ls_sleeping);
+  } while(index_proc > NPROC);
   p = proc[index];
   if(p != myproc()){
       cquire(&p->lock);

@@ -80,6 +80,10 @@ struct trapframe {
   /* 280 */ uint64 t6;
 };
 
+struct node {
+    struct node next; //instead of pointers, we can use index of the node in the proc[] array
+    uint proc_index;
+};
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
@@ -108,11 +112,7 @@ struct proc {
   char name[16];               // Process name (debugging)
   int cpus_affiliated;
   int index_in_proc;
-};
-
-struct node {
-    struct node next; //instead of pointers, we can use index of the node in the proc[] array
-    uint proc_index;
+  struct node *curr_proc_node;
 };
 
 struct list {
