@@ -252,7 +252,7 @@ userinit(void)
   p = allocproc();
   p->cpus_affiliated = allocate_proc_to_cpu();
   p->curr_proc_node->next =NULL;
-  add(ls_ready_cpu[p->cpus_affiliated], first_node);
+  add(ls_ready_cpu[p->cpus_affiliated], &p->curr_proc_node);
 
   initproc = p;
   
@@ -340,10 +340,8 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   np->cpus_affiliated = p->cpus_affiliated;
-  struct node fork_node;
-  fork_node.proc_index = p->pid;
-  fork_node.next = NULL;
-  add(ls_ready_cpu[p->cpus_affiliated], fork_node);
+  np->curr_proc_node->next=NULL;
+  add(ls_ready_cpu[p->cpus_affiliated], &np->curr_proc_node);
   release(&np->lock);
 
   return pid;
@@ -397,10 +395,9 @@ exit(int status)
   // Parent might be sleeping in wait().
   wakeup(p->parent);
 
-  struct node *zombie_proc;
   acquire(&p->lock);
-  zombie_proc->proc_index = p->pid;
-  add(ls_zombie, zombie_proc);
+  p->curr_proc_node->next=NULL;
+  add(ls_zombie, &p->curr_proc_node);
   p->xstate = status;
   p->state = ZOMBIE;
 
@@ -490,10 +487,8 @@ scheduler(void)
     swtch(&c->context, &p->context);
     // Process is done running for now.
     // It should have changed its p->state before coming back.
-    struct node new_node;
-    new_node.proc_index = proc_index;
-    new_node.next = NULL;
-    add(ls_ready_cpu[p->cpus_affiliated], new_node);
+    p->curr_proc_node->next=NULL;
+    add(ls_ready_cpu[p->cpus_affiliated], &p->curr_proc_node);
     c->proc = 0;
     release(&p->lock);
   }
@@ -533,10 +528,8 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
-  struct node ready_node;
-  ready_node.proc_index = p->pid;
-  ready_node.next = NULL;
-  add(ls_ready_cpu[p->cpus_affiliated], ready_node);
+  p->curr_proc_node->next=NULL;
+  add(ls_ready_cpu[p->cpus_affiliated], &p->curr_proc_node);
   sched();
   release(&p->lock);
 }
@@ -582,10 +575,8 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
-  struct node sleeping_node;
-  sleeping_node.proc_index = p->pid;
-  sleeping_node.next =NULL;
-  add(ls_sleeping, sleeping_node);
+  p->curr_proc_node->next =NULL;
+  add(ls_sleeping, &p->curr_proc_node);
 
   sched();
 
@@ -612,10 +603,8 @@ wakeup(void *chan)
       cquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
           p->state = RUNNABLE;
-          struct node ready_node;
-          ready_node.proc_index = p->pid;
-          ready_node.next = NULL;
-          add(ls_ready_cpu[p->cpus_affiliated], ready_node);
+          p->curr_proc_node->next= NULL;
+          add(ls_ready_cpu[p->cpus_affiliated], &p->curr_proc_node);
       }
       release(&p->lock);
     }
