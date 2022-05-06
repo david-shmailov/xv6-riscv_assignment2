@@ -112,11 +112,12 @@ uint            pop(struct list ls);
 void            remove(struct list ls, struct node *node);
 int             allocate_proc_to_cpu();
 int             set_cpu(int cpu_num);
-int             get_cpu();
-int             min_num_of_procs();
+int             get_cpu(void);
+int             min_num_of_procs(void);
 int             add_num_of_procs(int cpuid, int addition);
 int             cpu_process_count(int cpu_num);
-
+int             steal_proc(void);
+int             change_affiliation_cas(struct proc *p);
 
 
 // swtch.S

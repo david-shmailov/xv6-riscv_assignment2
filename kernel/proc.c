@@ -141,6 +141,36 @@ add_num_of_procs(int cpuid, int addition){
     return 0;
 }
 
+int
+change_affiliation_cas(struct proc *p){
+    int my_id = cpuid();
+    int curr;
+    do{
+        curr = p->cpus_affiliated;
+    }while(cas(&(p->cpus_affiliated), curr, my_id));
+    return 0; // todo should we abort if some other cpu steals this proc?
+}
+
+
+int steal_proc(void){
+    int my_id = cpuid(); //todo how to disable interrupts? (cpuid comment requires interrupts disabled)
+    for (int cpuid = 0; cpuid < NCPU; cpuid++){
+        if (cpuid != my_id && num_of_procs[cpuid] > 1){ // the running process is also counted
+            struct proc *p;
+            // remove from current cpu:
+            int pid = pop(ls_ready_cpu[cpuid]);
+            add_num_of_procs(cpuid,-1);
+            p = &proc[pid];
+            // add to my cpu:
+            change_affiliation_cas(p);
+            add(ls_ready_cpu[my_id],p->curr_proc_node);
+            add_num_of_procs(my_id,1);
+            return pid;
+        }
+    }
+    return NPROC + 1;
+}
+
 // Look in the process table for an UNUSED proc.
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
@@ -516,25 +546,26 @@ scheduler(void)
     for(;;){
         // Avoid deadlock by ensuring that devices can interrupt.
         intr_on();
-    do {
-        proc_index = pop(ls_ready_cpu[cpu_num]);
-        //add_num_of_procs(cpu_num, -1); todo im not sure if i count the process currently running
+        do{
+            proc_index = pop(ls_ready_cpu[cpu_num]);
+            if (proc_index > NPROC)//if im empty, attempt to steal
+                proc_index = steal_proc();
+        }while(proc_index > NPROC); // if I was empty, and couldn't steal, try again
 
-    }while (proc_index > NPROC);
-    p = &proc[proc_index];
+        p = &proc[proc_index];
 
-      if(p->state == RUNNABLE) printf("DEBUG proc index :%d, CPU: %d \n", proc_index, cpu_num);
-    acquire(&p->lock);
-    // Switch to chosen process.  It is the process's job
-    // to release its lock and then reacquire it
-    // before jumping back to us.
-    p->state = RUNNING;
-    c->proc = p;
-    swtch(&c->context, &p->context);
-    // Process is done running for now.
-    // It should have changed its p->state before coming back.
-    c->proc = 0;
-    release(&p->lock);
+        if(p->state == RUNNABLE) printf("DEBUG proc index :%d, CPU: %d \n", proc_index, cpu_num);
+        acquire(&p->lock);
+        // Switch to chosen process.  It is the process's job
+        // to release its lock and then reacquire it
+        // before jumping back to us.
+        p->state = RUNNING;
+        c->proc = p;
+        swtch(&c->context, &p->context);
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
+        release(&p->lock);
   }
 }
 
@@ -715,7 +746,7 @@ set_cpu(int cpu_num){
 }
 
 int
-get_cpu(){
+get_cpu(void){
     struct proc *p = myproc();
     acquire(&p->lock);
     int cpu_num = p->cpus_affiliated;
