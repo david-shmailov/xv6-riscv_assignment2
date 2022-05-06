@@ -89,6 +89,7 @@ procinit(void)
       add(ls_unused,  p->curr_proc_node);
       i++;
   }
+
 }
 
 // Must be called with interrupts disabled,
@@ -275,19 +276,20 @@ userinit(void)
   
   // allocate one user page and copy init's instructions
   // and data into it.
-  uvminit(p->pagetable, initcode, sizeof(initcode));
-  p->sz = PGSIZE;
+
+    uvminit(p->pagetable, initcode, sizeof(initcode));
+
+    p->sz = PGSIZE;
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
 
   safestrcpy(p->name, "initcode", sizeof(p->name));
-  p->cwd = namei("/");
+    p->cwd = namei("/");
 
-  p->state = RUNNABLE;
-
-  release(&p->lock);
+    p->state = RUNNABLE;
+    release(&p->lock);
 }
 
 // Grow or shrink user memory by n bytes.
@@ -433,8 +435,9 @@ wait(uint64 addr)
   struct proc *np;
   int havekids, pid;
   struct proc *p = myproc();
+    printf("DEBUG Process %s on CPU %d is going to waiting\n", &p->name, cpuid());
 
-  acquire(&wait_lock);
+    acquire(&wait_lock);
 
   for(;;){
     // Scan through table looking for exited children.
@@ -489,18 +492,15 @@ scheduler(void)
   c->proc = 0;
   int cpu_num = cpuid();
   uint proc_index;
-  for(;;){
-    // Avoid deadlock by ensuring that devices can interrupt.
-      if(cpu_num ==0) printf("hereeeeee \n");
-    intr_on();
-
-      if(cpu_num ==0) printf("hereeeeee2 \n");
+    for(;;){
+        // Avoid deadlock by ensuring that devices can interrupt.
+        //intr_on();
     do {
         proc_index = pop(ls_ready_cpu[cpu_num]);
     }while (proc_index > NPROC);
     p = &proc[proc_index];
 
-      if(p->state == RUNNABLE) printf("index is :%d, %d \n", proc_index, cpu_num);
+      if(p->state == RUNNABLE) printf("DEBUG proc index :%d, CPU: %d \n", proc_index, cpu_num);
     acquire(&p->lock);
     // Switch to chosen process.  It is the process's job
     // to release its lock and then reacquire it
@@ -538,7 +538,7 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
-  swtch(&p->context, &mycpu()->context);
+    swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
 
@@ -582,16 +582,16 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-  
+  printf("DEBUG Process %s on CPU %d is going to sleep\n", &p->name, cpuid());
   // Must acquire p->lock in order to
-  // change p->state and then call sched.
-  // Once we hold p->lock, we can be
-  // guaranteed that we won't miss any wakeup
-  // (wakeup locks p->lock),
-  // so it's okay to release lk.
+    // change p->state and then call sched.
+    // Once we hold p->lock, we can be
+    // guaranteed that we won't miss any wakeup
+    // (wakeup locks p->lock),
+    // so it's okay to release lk.
 
-  acquire(&p->lock);  //DOC: sleeplock1
-  release(lk);
+    acquire(&p->lock);  //DOC: sleeplock1
+    release(lk);
 
   // Go to sleep.
   p->chan = chan;

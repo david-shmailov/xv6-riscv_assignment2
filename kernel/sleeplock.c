@@ -21,6 +21,7 @@ initsleeplock(struct sleeplock *lk, char *name)
 void
 acquiresleep(struct sleeplock *lk)
 {
+    printf("DEBUG acquiresleep\n");
   acquire(&lk->lk);
   while (lk->locked) {
     sleep(lk, &lk->lk);

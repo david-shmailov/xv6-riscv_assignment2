@@ -86,6 +86,7 @@ uartinit(void)
 void
 uartputc(int c)
 {
+    printf("DEBUG uartputc\n");
   acquire(&uart_tx_lock);
 
   if(panicked){

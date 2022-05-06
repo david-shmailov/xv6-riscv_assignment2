@@ -76,6 +76,7 @@ pipeclose(struct pipe *pi, int writable)
 int
 pipewrite(struct pipe *pi, uint64 addr, int n)
 {
+    printf("DEBUG pipewrite\n");
   int i = 0;
   struct proc *pr = myproc();
 
@@ -105,6 +106,7 @@ pipewrite(struct pipe *pi, uint64 addr, int n)
 int
 piperead(struct pipe *pi, uint64 addr, int n)
 {
+    printf("DEBUG pipepread\n");
   int i;
   struct proc *pr = myproc();
   char ch;
