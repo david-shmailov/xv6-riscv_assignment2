@@ -159,7 +159,7 @@ CPUS := 3
 endif
 
 ifndef BLNCFLG
-BLNCFLG := ON
+BLNCFLG := OFF
 endif
 
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic

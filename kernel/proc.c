@@ -7,6 +7,7 @@
 #include "defs.h"
 #include <stddef.h>
 
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -27,7 +28,7 @@ struct node first_ready_cpu[NCPU];
 struct node nodes[NPROC+1];
 
 uint64 num_of_procs[NCPU]; // each cpu has a counter for the current running processes
-int num_of_cpus= 3;
+int num_of_cpus = 0;
 int nextpid = 1;
 struct spinlock pid_lock;
 
@@ -105,6 +106,7 @@ cpuid()
 struct cpu*
 mycpu(void) {
     int id = cpuid();
+    if(num_of_cpus< 1+id ) num_of_cpus=1+id;
     struct cpu *c = &cpus[id];
     c->cpuid = id;
     return c;
@@ -403,11 +405,8 @@ fork(void)
     int destination_cpu = -1; // I want it to crash and burn if the macros don't work!
     #if BLNCFLG==ON
         destination_cpu = min_num_of_procs();
-        printf("DEBUG on\n");
-        printf("dest cpu: %d\n", destination_cpu);
     #elif BLNCFLG==OFF
         destination_cpu = p->cpus_affiliated;
-        printf("DEBUG off\n");
     #else
         panic("Something is wrong with the macros!!");
     #endif
@@ -550,8 +549,8 @@ scheduler(void)
         intr_on();
         do{
             proc_index = pop(ls_ready_cpu[c->cpuid]);
-//            if (proc_index > NPROC)//if im empty, attempt to steal
-//                proc_index = steal_proc(c->cpuid);
+            if (proc_index > NPROC)//if im empty, attempt to steal
+                    proc_index = steal_proc(c->cpuid);
         }while(proc_index > NPROC); // if I was empty, and couldn't steal, try again
 
         p = &proc[proc_index];
@@ -889,7 +888,7 @@ void remove(struct list ls, struct node * node){
 
 int min_num_of_procs(){
     int min = 0;
-    for (int i=0; i < NCPU;i++){
+    for (int i=0; i < num_of_cpus;i++){
         if (num_of_procs[i] < num_of_procs[min]) min = i;
     }
     return min;

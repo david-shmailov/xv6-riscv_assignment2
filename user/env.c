@@ -13,11 +13,16 @@
 
 int
 main(int argc, char *argv[])
-{   if(fork()){
+{
+
+    int pid1 = fork();
+    int pid2 =fork();
+    if(pid1 == 0&&pid2 == 0){
         for(int i = 0; i < NCPU; i++){
             printf("CPU: %d has %d proccesses\n", i, cpu_process_count(i));
         }
     }
+    for(int i=0; i<100000; i++);
 
     exit(0);
     return 0;
