@@ -126,7 +126,7 @@ recover_from_log(void)
 void
 begin_op(void)
 {
-    printf("DEBUG begin_op\n");
+    //printf("DEBUG begin_op\n");
   acquire(&log.lock);
   while(1){
     if(log.committing){
