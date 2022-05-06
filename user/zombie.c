@@ -8,7 +8,7 @@
 int
 main(void)
 {
-    printf("DEBUG main in zombie.c\n");
+  //  printf("DEBUG main in zombie.c\n");
   if(fork() > 0)
     sleep(5);  // Let child exit before parent.
   exit(0);

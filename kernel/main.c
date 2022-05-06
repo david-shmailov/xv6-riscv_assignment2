@@ -18,9 +18,6 @@ main()
     printf("\n");
 
     kinit();         // physical page allocator
-      intr_on();
-      printf("pass intr on\n");
-      intr_off();
     kvminit();       // create kernel page table
     kvminithart();   // turn on paging
     procinit();      // process table

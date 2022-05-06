@@ -79,7 +79,7 @@ consolewrite(int user_src, uint64 src, int n)
 int
 consoleread(int user_dst, uint64 dst, int n)
 {
-    printf("DEBUG consoleread\n");
+   // printf("DEBUG consoleread\n");
   uint target;
   int c;
   char cbuf;
