@@ -16,7 +16,11 @@ main()
     printf("\n");
     printf("xv6 kernel is booting\n");
     printf("\n");
+
     kinit();         // physical page allocator
+      intr_on();
+      printf("pass intr on\n");
+      intr_off();
     kvminit();       // create kernel page table
     kvminithart();   // turn on paging
     procinit();      // process table
@@ -36,7 +40,7 @@ main()
     while(started == 0)
       ;
     __sync_synchronize();
-    printf("DEBUG hart %d starting\n", cpuid());
+    printf("hart %d starting\n", cpuid());
     kvminithart();    // turn on paging
     trapinithart();   // install kernel trap vector
     plicinithart();   // ask PLIC for device interrupts
