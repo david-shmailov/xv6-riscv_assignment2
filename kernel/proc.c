@@ -147,6 +147,14 @@ add_num_of_procs(int cpuid, int addition){
     } while(cas(&num_of_procs[cpuid],curr, curr + addition));
     return 0;
 }
+int
+add_num_of_procs_dec(int cpuid, int val_to_change){
+    do{
+        if(num_of_procs[cpuid]<val_to_change) return 0;
+    } while(cas(&num_of_procs[cpuid],val_to_change, val_to_change - 1));
+    return 1;
+}
+
 
 int
 change_affiliation_cas(struct proc *p, int my_id){
@@ -166,11 +174,10 @@ change_affiliation_cas(struct proc *p, int my_id){
 int steal_proc(int my_id){
     for (int cpuid = 0; cpuid < NCPU; cpuid++){
         if (cpuid != my_id && num_of_procs[cpuid] > 1){ // the running process is also counted
-            struct proc *p;
             // remove from current cpu:
-            int proc_ind = pop(ls_ready_cpu[cpuid]);
-            if (proc_ind <NPROC){ // if remove was successful
-                add_num_of_procs(cpuid,-1);
+            if (add_num_of_procs_dec(cpuid,num_of_procs[cpuid])){ // if remove was successful
+                struct proc *p;
+                int proc_ind = pop(ls_ready_cpu[cpuid]);
                 p = &proc[proc_ind];
                 // add to my cpu:
                 change_affiliation_cas(p, my_id);
@@ -557,7 +564,7 @@ scheduler(void)
         do{
             proc_index = pop(ls_ready_cpu[c->cpuid]);
             if (proc_index > NPROC)//if im empty, attempt to steal
-                    proc_index = steal_proc(c->cpuid);
+                   proc_index = steal_proc(c->cpuid);
         }while(proc_index > NPROC); // if I was empty, and couldn't steal, try again
 
         p = &proc[proc_index];
@@ -866,6 +873,7 @@ uint pop(struct list ls){
         return NPROC+1;
     }
 }
+
 void remove(struct list ls, struct node * node){
     struct node * pred = ls.head;
     int flag = 0;
@@ -900,4 +908,5 @@ int min_num_of_procs(){
     }
     return min;
 }
+
 

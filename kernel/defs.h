@@ -118,6 +118,7 @@ int             add_num_of_procs(int cpuid, int addition);
 int             cpu_process_count(int cpu_num);
 int             steal_proc(int my_id);
 int             change_affiliation_cas(struct proc *p, int my_id);
+int             add_num_of_procs_dec(int cpuid, int val_to_change);
 
 
 // swtch.S
