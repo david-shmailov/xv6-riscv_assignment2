@@ -107,6 +107,13 @@ struct cpu*
 mycpu(void) {
     int id = cpuid();
     if(num_of_cpus< 1+id ) num_of_cpus=1+id;
+    int tmp_cpu;
+    do{
+        if(num_of_cpus< 1+id ) {
+            tmp_cpu=num_of_cpus;
+        }
+        else break;
+    } while(cas(&num_of_cpus, tmp_cpu, 1+id));
     struct cpu *c = &cpus[id];
     c->cpuid = id;
     return c;
