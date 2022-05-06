@@ -13,14 +13,12 @@
 
 int
 main(int argc, char *argv[])
-{
-    int pids[16] ={0};
-    for(int i=0; i<5; i++){
-        int pid = fork();
-        if( pid != 0) pids[pid] +=1;
+{   if(fork()){
+        for(int i = 0; i < NCPU; i++){
+            printf("CPU: %d has %d proccesses\n", i, cpu_process_count(i));
+        }
     }
-    for(int i=0; i<16; i++){
-        if(pids[i]>1) printf("duplicate pid");
-    }
+
+    exit(0);
     return 0;
 }

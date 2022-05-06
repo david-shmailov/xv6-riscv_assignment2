@@ -140,30 +140,35 @@ add_num_of_procs(int cpuid, int addition){
 }
 
 int
-change_affiliation_cas(struct proc *p){
-    int my_id = cpuid();
+change_affiliation_cas(struct proc *p, int my_id){
     int curr;
-    do{
-        curr = p->cpus_affiliated;
-    }while(cas(&(p->cpus_affiliated), curr, my_id));
-    return 0; // todo should we abort if some other cpu steals this proc?
+//    do{
+//        curr = p->cpus_affiliated;
+//    }while(cas(&(p->cpus_affiliated), curr, my_id));
+    curr = p->cpus_affiliated;
+    if (!cas(&(p->cpus_affiliated), curr, my_id))
+        return 1;
+    else
+        panic("Change Affiliation FAILED");
+    return 0;
 }
 
 
-int steal_proc(void){
-    int my_id = cpuid(); //todo how to disable interrupts? (cpuid comment requires interrupts disabled)
+int steal_proc(int my_id){
     for (int cpuid = 0; cpuid < NCPU; cpuid++){
         if (cpuid != my_id && num_of_procs[cpuid] > 1){ // the running process is also counted
             struct proc *p;
             // remove from current cpu:
-            int pid = pop(ls_ready_cpu[cpuid]);
-            add_num_of_procs(cpuid,-1);
-            p = &proc[pid];
-            // add to my cpu:
-            change_affiliation_cas(p);
-            add(ls_ready_cpu[my_id],p->curr_proc_node);
-            add_num_of_procs(my_id,1);
-            return pid;
+            int proc_ind = pop(ls_ready_cpu[cpuid]);
+            if (proc_ind <NPROC){ // if remove was successful
+                add_num_of_procs(cpuid,-1);
+                p = &proc[proc_ind];
+                // add to my cpu:
+                change_affiliation_cas(p, my_id);
+                add(ls_ready_cpu[my_id],p->curr_proc_node);
+                add_num_of_procs(my_id,1);
+                return proc_ind;
+            }
         }
     }
     return NPROC + 1;
@@ -398,8 +403,11 @@ fork(void)
     int destination_cpu = -1; // I want it to crash and burn if the macros don't work!
     #if BLNCFLG==ON
         destination_cpu = min_num_of_procs();
+        printf("DEBUG on\n");
+        printf("dest cpu: %d\n", destination_cpu);
     #elif BLNCFLG==OFF
         destination_cpu = p->cpus_affiliated;
+        printf("DEBUG off\n");
     #else
         panic("Something is wrong with the macros!!");
     #endif
@@ -542,13 +550,12 @@ scheduler(void)
         intr_on();
         do{
             proc_index = pop(ls_ready_cpu[c->cpuid]);
-            if (proc_index > NPROC)//if im empty, attempt to steal
-                proc_index = steal_proc();
+//            if (proc_index > NPROC)//if im empty, attempt to steal
+//                proc_index = steal_proc(c->cpuid);
         }while(proc_index > NPROC); // if I was empty, and couldn't steal, try again
 
         p = &proc[proc_index];
 
-        if(p->state == RUNNABLE) printf("DEBUG proc index :%d, CPU: %d \n", proc_index, cpu_num);
         acquire(&p->lock);
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
@@ -716,7 +723,7 @@ kill(int pid)
 }
 
 int cpu_process_count(int cpu_num){
-    if ( 0 < cpu_num && cpu_num<NCPU) {
+    if ( 0 <= cpu_num && cpu_num<NCPU) {
         return num_of_procs[cpu_num];
     }else{
         return -1;
@@ -881,9 +888,9 @@ void remove(struct list ls, struct node * node){
 }
 
 int min_num_of_procs(){
-    int min = num_of_procs[0];
-    for (int i=1; i < NCPU;i++){
-        if (num_of_procs[i] < min) min = num_of_procs[i];
+    int min = 0;
+    for (int i=0; i < NCPU;i++){
+        if (num_of_procs[i] < num_of_procs[min]) min = i;
     }
     return min;
 }
