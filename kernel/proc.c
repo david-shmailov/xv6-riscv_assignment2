@@ -27,7 +27,7 @@ struct list ls_ready_cpu[NCPU];
 struct node first_ready_cpu[NCPU];
 struct node nodes[NPROC+1];
 
-
+uint64 num_of_procs[NCPU]; // each cpu has a counter for the current running processes
 int num_of_cpus= 3;
 int nextpid = 1;
 struct spinlock pid_lock;
@@ -51,7 +51,7 @@ struct spinlock wait_lock;
 void
 proc_mapstacks(pagetable_t kpgtbl) {
   struct proc *p;
-  
+
   for(p = proc; p < &proc[NPROC]; p++) {
     char *pa = kalloc();
     if(pa == 0)
@@ -75,6 +75,7 @@ procinit(void)
   for(int i=0; i<NCPU; i++) {
       initlock(&ready_cpu[i], "ready_cpu[i]"+i);
       ls_ready_cpu[i]= init_linked_list(&ready_cpu[i], &first_ready_cpu[i]);
+      num_of_procs[i] = 0;
   }
 
   initlock(&pid_lock, "nextpid");
@@ -129,6 +130,15 @@ allocpid() {
   } while(cas(&nextpid, pid, pid+1));
 
   return pid;
+}
+
+int
+add_num_of_procs(int cpuid, int addition){
+    int curr;
+    do{
+        curr = num_of_procs[cpuid];
+    } while(cas(&num_of_procs[cpuid],curr, curr + addition));
+    return 0;
 }
 
 // Look in the process table for an UNUSED proc.
@@ -271,9 +281,10 @@ userinit(void)
   p->cpus_affiliated = cpuid();
   p->curr_proc_node->next =NULL;
   add(ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
+  add_num_of_procs(p->cpus_affiliated, 1);
 
   initproc = p;
-  
+
   // allocate one user page and copy init's instructions
   // and data into it.
 
@@ -357,11 +368,20 @@ fork(void)
   release(&wait_lock);
 
   acquire(&np->lock);
-  np->state = RUNNABLE;
-  np->cpus_affiliated = p->cpus_affiliated;
-  np->curr_proc_node->next=NULL;
-  add(ls_ready_cpu[p->cpus_affiliated], np->curr_proc_node);
-  release(&np->lock);
+    np->state = RUNNABLE;
+    int destination_cpu = -1; // I want it to crash and burn if the macros don't work!
+    #if BLNCFLG==ON
+        destination_cpu = min_num_of_procs();
+    #elif BLNCFLG==OFF
+        destination_cpu = p->cpus_affiliated;
+    #else
+        panic("Something is wrong with the macros!!");
+    #endif
+    np->curr_proc_node->next=NULL;
+    np->cpus_affiliated = destination_cpu;
+    add(ls_ready_cpu[destination_cpu], np->curr_proc_node);
+    release(&np->lock);
+    add_num_of_procs(destination_cpu, 1);
 
   return pid;
 }
@@ -417,6 +437,7 @@ exit(int status)
   acquire(&p->lock);
   p->curr_proc_node->next=NULL;
   add(ls_zombie, p->curr_proc_node);
+  add_num_of_procs(p->cpus_affiliated, -1); //todo they didnt say to update here but it makes sense
   p->xstate = status;
   p->state = ZOMBIE;
 
@@ -471,7 +492,7 @@ wait(uint64 addr)
       release(&wait_lock);
       return -1;
     }
-    
+
     // Wait for a child to exit.
     sleep(p, &wait_lock);  //DOC: wait-sleep
   }
@@ -494,9 +515,11 @@ scheduler(void)
   uint proc_index;
     for(;;){
         // Avoid deadlock by ensuring that devices can interrupt.
-        //intr_on();
+        intr_on();
     do {
         proc_index = pop(ls_ready_cpu[cpu_num]);
+        //add_num_of_procs(cpu_num, -1); todo im not sure if i count the process currently running
+
     }while (proc_index > NPROC);
     p = &proc[proc_index];
 
@@ -598,8 +621,9 @@ sleep(void *chan, struct spinlock *lk)
   p->state = SLEEPING;
   p->curr_proc_node->next =NULL;
   add(ls_sleeping, p->curr_proc_node);
+    add_num_of_procs(p->cpus_affiliated, -1); //todo they didnt say to update here but it makes sense
 
-  sched();
+    sched();
 
   // Tidy up.
   p->chan = 0;
@@ -623,9 +647,18 @@ wakeup(void *chan)
   if(p != myproc()){
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
+            int destination_cpu = -1;
+            #if BLNCFLG==ON
+                destination_cpu = min_num_of_procs();
+            #elif BLNCFLG==OFF
+                destination_cpu = p->cpus_affiliated;
+            #else
+                panic("Something is wrong with the macros!!");
+            #endif
           p->state = RUNNABLE;
           p->curr_proc_node->next= NULL;
-          add(ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
+          add(ls_ready_cpu[destination_cpu], p->curr_proc_node);
+          add_num_of_procs(destination_cpu, 1);
       }
       release(&p->lock);
     }
@@ -655,6 +688,16 @@ kill(int pid)
   }
   return -1;
 }
+
+int cpu_process_count(int cpu_num){
+    if ( 0 < cpu_num && cpu_num<NCPU) {
+        return num_of_procs[cpu_num];
+    }else{
+        return -1;
+    }
+}
+
+
 // move a process to a different cpu
 // returns the cpu number if successful or negative number if fails
 int
@@ -815,6 +858,15 @@ void remove(struct list ls, struct node * node){
         release(&proc[pred.proc_index].lock_linked_list);
     release(&proc[curr.proc_index].lock_linked_list);
 }
+
+int min_num_of_procs(){
+    int min = num_of_procs[0];
+    for (int i=1; i < NCPU;i++){
+        if (num_of_procs[i] < min) min = num_of_procs[i];
+    }
+    return min;
+}
+
 
 int allocate_proc_to_cpu(){
     int tmp = next_cpu;

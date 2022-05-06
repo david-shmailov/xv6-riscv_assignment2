@@ -113,6 +113,9 @@ void            remove(struct list ls, struct node *node);
 int             allocate_proc_to_cpu();
 int             set_cpu(int cpu_num);
 int             get_cpu();
+int             min_num_of_procs();
+int             add_num_of_procs(int cpuid, int addition);
+int             cpu_process_count(int cpu_num);
 
 
 
