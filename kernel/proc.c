@@ -567,8 +567,10 @@ scheduler(void)
         intr_on();
         do{
             proc_index = pop(ls_ready_cpu[c->cpuid]);
+            #if BLNCFLG==1
             if (proc_index > NPROC)//if im empty, attempt to steal
                    proc_index = steal_proc(c->cpuid);
+            #endif
         }while(proc_index > NPROC); // if I was empty, and couldn't steal, try again
 
         p = &proc[proc_index];
