@@ -419,10 +419,12 @@ fork(void)
   acquire(&np->lock);
     np->state = RUNNABLE;
     int destination_cpu = -1; // I want it to crash and burn if the macros don't work!
-    #if BLNCFLG==ON
+    #if BLNCFLG==1
         destination_cpu = min_num_of_procs();
-    #elif BLNCFLG==OFF
+        printf("flag is on\n");
+    #elif BLNCFLG==0
         destination_cpu = p->cpus_affiliated;
+        printf("flag is off\n");
     #else
         panic("Something is wrong with the macros!!");
     #endif
@@ -694,9 +696,9 @@ wakeup(void *chan)
             acquire(&p->lock);
             if(p->state == SLEEPING && p->chan == chan) {
                 int destination_cpu = -1;
-                #if BLNCFLG==ON
+                #if BLNCFLG==1
                     destination_cpu = min_num_of_procs();
-                #elif BLNCFLG==OFF
+                #elif BLNCFLG==0
                     destination_cpu = p->cpus_affiliated;
                 #else
                     panic("Something is wrong with the macros!!");

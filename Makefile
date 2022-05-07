@@ -64,6 +64,12 @@ CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
 CFLAGS += -I.
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 
+CFLAGS += -DOFF=0
+CFLAGS += -DON=1
+BLNCFLG = ON
+CFLAGS += -DBLNCFLG=$(BLNCFLG)
+
+
 # Disable PIE when possible (for Ubuntu 16.10 toolchain)
 ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]no-pie'),)
 CFLAGS += -fno-pie -no-pie
@@ -158,9 +164,8 @@ ifndef CPUS
 CPUS := 3
 endif
 
-ifndef BLNCFLG
-BLNCFLG := ON
-endif
+
+
 
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
 QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0
