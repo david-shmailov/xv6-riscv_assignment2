@@ -150,7 +150,7 @@ add_num_of_procs(int cpuid, int addition){
 int
 add_num_of_procs_dec(int cpuid, int val_to_change){
     do{
-        if(num_of_procs[cpuid]<val_to_change) return 0;
+        if(num_of_procs[cpuid]<val_to_change || val_to_change <= 1) return 0;
     } while(cas(&num_of_procs[cpuid],val_to_change, val_to_change - 1));
     return 1;
 }
@@ -178,12 +178,14 @@ int steal_proc(int my_id){
             if (add_num_of_procs_dec(cpuid,num_of_procs[cpuid])){ // if remove was successful
                 struct proc *p;
                 int proc_ind = pop(ls_ready_cpu[cpuid]);
-                p = &proc[proc_ind];
-                // add to my cpu:
-                change_affiliation_cas(p, my_id);
-                add(ls_ready_cpu[my_id],p->curr_proc_node);
-                add_num_of_procs(my_id,1);
-                return proc_ind;
+                if(proc_ind< NPROC) {
+                    p = &proc[proc_ind];
+                    // add to my cpu:
+                    change_affiliation_cas(p, my_id);
+                    add(ls_ready_cpu[my_id], p->curr_proc_node);
+                    add_num_of_procs(my_id, 1);
+                    return proc_ind;
+                }
             }
         }
     }
