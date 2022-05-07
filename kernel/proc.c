@@ -419,9 +419,9 @@ fork(void)
   acquire(&np->lock);
     np->state = RUNNABLE;
     int destination_cpu = -1; // I want it to crash and burn if the macros don't work!
-    #if BLNCFLG==1
+    #if BLNCFLG==ON
         destination_cpu = min_num_of_procs();
-    #elif BLNCFLG==0
+    #elif BLNCFLG==OFF
         destination_cpu = p->cpus_affiliated;
     #else
         panic("Something is wrong with the macros!!");
@@ -565,7 +565,7 @@ scheduler(void)
         intr_on();
         do{
             proc_index = pop(ls_ready_cpu[c->cpuid]);
-            #if BLNCFLG==1
+            #if BLNCFLG==ON
             if (proc_index > NPROC)//if im empty, attempt to steal
                    proc_index = steal_proc(c->cpuid);
             #endif
@@ -696,9 +696,9 @@ wakeup(void *chan)
             acquire(&p->lock);
             if(p->state == SLEEPING && p->chan == chan) {
                 int destination_cpu = -1;
-                #if BLNCFLG==1
+                #if BLNCFLG==ON
                     destination_cpu = min_num_of_procs();
-                #elif BLNCFLG==0
+                #elif BLNCFLG==OFF
                     destination_cpu = p->cpus_affiliated;
                 #else
                     panic("Something is wrong with the macros!!");
