@@ -31,6 +31,7 @@ uint64 num_of_procs[NCPU]; // each cpu has a counter for the current running pro
 int num_of_cpus = 0;
 int nextpid = 1;
 struct spinlock pid_lock;
+int my_turn_to_steal[NCPU]={0};
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
@@ -154,7 +155,13 @@ add_num_of_procs_dec(int cpuid, int val_to_change){
     } while(cas(&num_of_procs[cpuid],val_to_change, val_to_change - 1));
     return 1;
 }
-
+int
+my_turn(int cpuid, int curr_val, int new_val){
+    do{
+        if(my_turn_to_steal[cpuid] != curr_val) return 0;
+    } while(cas(&my_turn_to_steal[cpuid],curr_val, new_val));
+    return 1;
+}
 
 int
 change_affiliation_cas(struct proc *p, int my_id){
@@ -172,7 +179,7 @@ change_affiliation_cas(struct proc *p, int my_id){
 
 
 int steal_proc(int my_id){
-    for (int cpuid = 0; cpuid < NCPU; cpuid++){
+    for (int cpuid = 0; cpuid < num_of_cpus; cpuid++){
         if (cpuid != my_id && num_of_procs[cpuid] > 1){ // the running process is also counted
             // remove from current cpu:
             if (add_num_of_procs_dec(cpuid,num_of_procs[cpuid])){ // if remove was successful
@@ -182,10 +189,12 @@ int steal_proc(int my_id){
                     p = &proc[proc_ind];
                     // add to my cpu:
                     change_affiliation_cas(p, my_id);
-                    add(ls_ready_cpu[my_id], p->curr_proc_node);
+                    p->curr_proc_node->next=NULL;
                     add_num_of_procs(my_id, 1);
                     return proc_ind;
                 }
+                else
+                    add_num_of_procs(cpuid, 1);
             }
         }
     }
@@ -567,9 +576,10 @@ scheduler(void)
             proc_index = pop(ls_ready_cpu[c->cpuid]);
             #if BLNCFLG==ON
             if (proc_index > NPROC)//if im empty, attempt to steal
-                   proc_index = steal_proc(c->cpuid);
+                proc_index = steal_proc(c->cpuid);
             #endif
         }while(proc_index > NPROC); // if I was empty, and couldn't steal, try again
+
 
         p = &proc[proc_index];
 
@@ -852,13 +862,20 @@ struct list init_linked_list(struct spinlock * lock, struct node * first){
 }
 
 void add(struct list ls, struct node * node){
+    node->next =NULL;
     struct node * curr = ls.head;
-    while(curr->next != NULL){
-        curr = curr->next;
+    if(curr->next == NULL){
+        acquire(&ls.first_lock);
+        curr->next = node;
+        release(&ls.first_lock);
+    }else {
+        while (curr->next != NULL) {
+            curr = curr->next;
+        }
+        acquire(&proc[curr->proc_index].lock_linked_list);
+        curr->next = node;
+        release(&proc[curr->proc_index].lock_linked_list);
     }
-    acquire(&proc[curr->proc_index].lock_linked_list);
-    curr->next = node;
-    release(&proc[curr->proc_index].lock_linked_list);
 }
 
 uint pop(struct list ls){
@@ -869,8 +886,10 @@ uint pop(struct list ls){
         acquire(&proc[curr->proc_index].lock_linked_list);
         pred->next = curr->next;
         release(&ls.first_lock);
+        uint index= curr->proc_index;
+        curr->next = NULL;
         release(&proc[curr->proc_index].lock_linked_list);
-        return curr->proc_index;
+        return index;
     }
     else {
         release(&ls.first_lock);
