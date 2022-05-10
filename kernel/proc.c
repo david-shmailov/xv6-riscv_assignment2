@@ -22,16 +22,15 @@ struct node first_zombie;
 struct spinlock sleeping;
 struct list ls_sleeping;
 struct node first_sleeping;
-struct spinlock ready_cpu[NCPU];
-struct list ls_ready_cpu[NCPU];
-struct node first_ready_cpu[NCPU];
+struct spinlock ready_cpu[CPUS];
+struct list ls_ready_cpu[CPUS];
+struct node first_ready_cpu[CPUS];
 struct node nodes[NPROC+1];
 
-uint64 num_of_procs[NCPU]; // each cpu has a counter for the current running processes
-int num_of_cpus = 0;
+uint64 num_of_procs[CPUS]; // each cpu has a counter for the current running processes
 int nextpid = 1;
 struct spinlock pid_lock;
-int my_turn_to_steal[NCPU]={0};
+int my_turn_to_steal[CPUS]={0};
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
@@ -72,7 +71,7 @@ procinit(void)
     ls_zombie = init_linked_list(&zombie, &first_zombie);
     initlock(&sleeping, "sleeping");
     ls_sleeping = init_linked_list(&sleeping, &first_sleeping);
-    for(int i=0; i<NCPU; i++) {
+    for(int i=0; i<CPUS; i++) {
         initlock(&ready_cpu[i], "ready_cpu[i]"+i);
         ls_ready_cpu[i]= init_linked_list(&ready_cpu[i], &first_ready_cpu[i]);
         num_of_procs[i] = 0;
@@ -107,14 +106,6 @@ cpuid()
 struct cpu*
 mycpu(void) {
     int id = cpuid();
-    if(num_of_cpus< 1+id ) num_of_cpus=1+id;
-    int tmp_cpu;
-    do{
-        if(num_of_cpus< 1+id ) {
-            tmp_cpu=num_of_cpus;
-        }
-        else break;
-    } while(cas(&num_of_cpus, tmp_cpu, 1+id));
     struct cpu *c = &cpus[id];
     c->cpuid = id;
     return c;
@@ -179,7 +170,7 @@ change_affiliation_cas(struct proc *p, int my_id){
 
 
 int steal_proc(int my_id){
-    for (int cpuid = 0; cpuid < num_of_cpus; cpuid++){
+    for (int cpuid = 0; cpuid < CPUS; cpuid++){
         if (cpuid != my_id && num_of_procs[cpuid] > 1){ // the running process is also counted
             // remove from current cpu:
             if (add_num_of_procs_dec(cpuid,num_of_procs[cpuid])){ // if remove was successful
@@ -750,7 +741,7 @@ kill(int pid)
 }
 
 int cpu_process_count(int cpu_num){
-    if ( 0 <= cpu_num && cpu_num<NCPU) {
+    if ( 0 <= cpu_num && cpu_num<CPUS) {
         return num_of_procs[cpu_num];
     }else{
         return -1;
@@ -926,7 +917,7 @@ void remove(struct list ls, struct node * node){
 
 int min_num_of_procs(){
     int min = 0;
-    for (int i=0; i < num_of_cpus;i++){
+    for (int i=0; i < CPUS;i++){
         if (num_of_procs[i] < num_of_procs[min]) min = i;
     }
     return min;
