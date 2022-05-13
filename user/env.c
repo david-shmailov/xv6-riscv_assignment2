@@ -9,25 +9,34 @@
 #include "kernel/memlayout.h"
 #include "kernel/riscv.h"
 
-
+void cas_test(){
+    printf("%d\n", getpid());
+    for(int i=0; i <4;i++){
+        int pid = fork();
+        if (pid != 0)
+            printf("%d\n", pid);
+    }
+}
 
 int
 main(int argc, char *argv[])
 {
-
+    //cas_test();
     int pid1 = fork();
-    int pid2 =fork();
-    int pid3 =fork();
-//    int pid4 =fork();
-//    int pid5 =fork();
-//    int pid6 =fork();
-    if(pid1 == 0&&pid2 == 0&&pid3 == 0){
-        for(int i = 0; i < NCPU; i++){
+    int pid2 = fork();
+    int pid3 = fork();
+    int pid4 = fork();
+    printf("pid %d started\n", getpid());
+    if(pid1 != 0 && pid2 != 0 && pid3 !=0 && pid4 !=0){ // fork returns pid for the father, and returns 0 for the child
+        for(int i = 0; i < CPUS; i++){
             printf("CPU: %d has %d proccesses\n", i, cpu_process_count(i));
         }
     }
-    for(int i=0; i<1000; i++);
+    for(int i=0; i<100000; i++){
+        printf("");
+    }
+    printf("pid %d finished\n", getpid());
 
-    exit(-1);
+    exit(0);
     return 0;
 }

@@ -6,6 +6,8 @@
 #include "proc.h"
 #include "defs.h"
 #include <stddef.h>
+//debug:
+#include <stdlib.h>
 
 
 struct cpu cpus[NCPU];
@@ -60,20 +62,29 @@ proc_mapstacks(pagetable_t kpgtbl) {
     }
 }
 
+
 // initialize the proc table at boot time.
 void
 procinit(void)
 {
     struct proc *p;
     initlock(&unused, "unused");
-    ls_unused = init_linked_list(&unused, &first_unused);
+    ls_unused = init_linked_list(&unused, &first_unused, "unused");
     initlock(&zombie, "zombie");
-    ls_zombie = init_linked_list(&zombie, &first_zombie);
+    ls_zombie = init_linked_list(&zombie, &first_zombie, "zombie");
     initlock(&sleeping, "sleeping");
-    ls_sleeping = init_linked_list(&sleeping, &first_sleeping);
+    ls_sleeping = init_linked_list(&sleeping, &first_sleeping, "sleeping");
     for(int i=0; i<CPUS; i++) {
         initlock(&ready_cpu[i], "ready_cpu[i]"+i);
-        ls_ready_cpu[i]= init_linked_list(&ready_cpu[i], &first_ready_cpu[i]);
+        //debug
+        char * ls_name;
+        if (i == 0)
+            ls_name = "ready_0";
+        if (i==1)
+            ls_name = "ready_1";
+        if (i==2)
+            ls_name = "ready_2";
+        ls_ready_cpu[i]= init_linked_list(&ready_cpu[i], &first_ready_cpu[i], ls_name);
         num_of_procs[i] = 0;
     }
     initlock(&pid_lock, "nextpid");
@@ -664,14 +675,14 @@ sleep(void *chan, struct spinlock *lk)
     // so it's okay to release lk.
 
     acquire(&p->lock);  //DOC: sleeplock1
+    // Go to sleep.
+    p->chan = chan;
+    p->state = SLEEPING;
+    p->curr_proc_node->next =NULL;
+    add(ls_sleeping, p->curr_proc_node);
+    add_num_of_procs(p->cpus_affiliated, -1); //todo they didnt say to update here but it makes sense
     release(lk);
 
-  // Go to sleep.
-  p->chan = chan;
-  p->state = SLEEPING;
-  p->curr_proc_node->next =NULL;
-  add(ls_sleeping, p->curr_proc_node);
-  add_num_of_procs(p->cpus_affiliated, -1); //todo they didnt say to update here but it makes sense
 
     sched();
 
@@ -729,8 +740,22 @@ kill(int pid)
         if(p->pid == pid){
             p->killed = 1;
             if(p->state == SLEEPING){
-                // Wake process from sleep().
+                // Wake process from sleep()
                 p->state = RUNNABLE;
+                //todo i think we need to add here to a list
+                int destination_cpu = -1;
+                #if BLNCFLG==ON
+                    destination_cpu = min_num_of_procs();
+                #elif BLNCFLG==OFF
+                    destination_cpu = p->cpus_affiliated;
+                #else
+                    panic("Something is wrong with the macros!!");
+                #endif
+                remove(ls_sleeping,p->curr_proc_node);
+                p->curr_proc_node->next= NULL;
+                p->cpus_affiliated = destination_cpu;
+                add(ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
+                add_num_of_procs(destination_cpu, 1);
             }
             release(&p->lock);
             return 0;
@@ -843,12 +868,13 @@ struct node init_node(uint proc_index){
 }
 
 
-struct list init_linked_list(struct spinlock * lock, struct node * first){
+struct list init_linked_list(struct spinlock * lock, struct node * first, char * name){
     struct list ls;
     first->proc_index= NPROC+1;
     first->next =NULL;
     ls.head = first;
     ls.first_lock =*lock;
+    ls.name = name;
     return ls;
 }
 
@@ -858,6 +884,7 @@ void add(struct list ls, struct node * node){
     if(curr->next == NULL){
         acquire(&ls.first_lock);
         curr->next = node;
+        printf("Debug proc_ind %d added to %s\n",curr->proc_index,ls.name);
         release(&ls.first_lock);
     }else {
         while (curr->next != NULL) {
@@ -865,6 +892,7 @@ void add(struct list ls, struct node * node){
         }
         acquire(&proc[curr->proc_index].lock_linked_list);
         curr->next = node;
+        printf("Debug proc_ind %d added to %s\n",curr->proc_index,ls.name);
         release(&proc[curr->proc_index].lock_linked_list);
     }
 }
@@ -875,6 +903,7 @@ uint pop(struct list ls){
     if(pred->next != NULL){
         struct node * curr = pred->next;
         acquire(&proc[curr->proc_index].lock_linked_list);
+        printf("Debug proc_ind %d popped from %s\n", curr->proc_index, ls.name);
         pred->next = curr->next;
         release(&ls.first_lock);
         uint index= curr->proc_index;
@@ -894,24 +923,24 @@ void remove(struct list ls, struct node * node){
     acquire(&ls.first_lock);
     struct node * curr = pred->next;
     acquire(&proc[curr->proc_index].lock_linked_list);
-    while(curr->proc_index != node->proc_index){
-        if(flag == 0){
+    while(curr->proc_index != node->proc_index) {
+        if (flag == 0) {
             release(&ls.first_lock);
             flag++;
-        }
-        else
+        } else
             release(&proc[pred->proc_index].lock_linked_list);
         pred = curr;
         curr = curr->next;
         acquire(&proc[curr->proc_index].lock_linked_list);
     }
+    printf("Debug proc_ind %d removed from %s\n",curr->proc_index,ls.name);
     pred->next = curr->next;
     if(flag == 0){
         release(&ls.first_lock);
         flag++;
     }
     else
-        release(&proc[pred->proc_index].lock_linked_list);
+        release(&proc[pred->proc_index].lock_linked_list); // todo why do we release twice?
     release(&proc[curr->proc_index].lock_linked_list);
 }
 

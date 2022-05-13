@@ -117,6 +117,7 @@ struct proc {
 };
 
 struct list {
+    char * name;
     struct node *head;
     struct spinlock first_lock;
 };
