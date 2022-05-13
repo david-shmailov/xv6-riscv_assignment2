@@ -46,6 +46,56 @@ extern uint64 cas( volatile void *addr , int expected , int newval);
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
+
+int  debug_print_locks = 1;
+
+void debug_acquire(struct spinlock *lk){
+    int id = -1;
+    if (debug_print_locks == 1){
+        push_off();
+        id = mycpu()->cpuid;
+        pop_off();
+        printf("cpu %d acquiring lock %s\n", id, lk->name);
+    }
+    acquire(lk);
+    if (debug_print_locks == 1)
+        printf("cpu %d acquired lock %s\n", id, lk->name);
+}
+
+void debug_release(struct spinlock *lk){
+    int id = lk->cpu->cpuid;
+    if (debug_print_locks == 1)
+        printf("cpu %d releasing lock %s\n", id, lk->name);
+    release(lk);
+    if (debug_print_locks == 1)
+        printf("cpu %d released lock %s\n", id, lk->name);
+}
+
+void print_list(struct list ls){
+    acquire(&ls.first_lock);
+    int first = 1;
+    struct node * curr = ls.head;
+    if(curr->next == NULL){
+        printf("Debug list %s is empty\n", ls.name);
+        release(&ls.first_lock);
+    }else{
+        printf("Debug list %s: ",ls.name);
+        while(curr->next != NULL){
+            if (first ==1){
+                release(&ls.first_lock);
+                first = 0;
+            }else{
+                release(&proc[curr->proc_index].lock_linked_list);
+            }
+            acquire(&proc[curr->next->proc_index].lock_linked_list);
+            curr = curr->next;
+            printf("%d->", curr->proc_index);
+        }
+        release(&proc[curr->proc_index].lock_linked_list);
+        printf("\n");
+    }
+}
+
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
@@ -99,6 +149,8 @@ procinit(void)
         add(ls_unused,  p->curr_proc_node);
         i++;
     }
+    //print_list(ls_unused);
+    //print_list(ls_sleeping);
 }
 
 // Must be called with interrupts disabled,
@@ -888,7 +940,7 @@ void add(struct list ls, struct node * node){
     int flag =0;
     if(curr->next == NULL){
         curr->next = node;
-        printf("Debug proc_ind %d added to %s\n",curr->proc_index,ls.name);
+        printf("Debug proc_ind %d added to %s\n",node->proc_index,ls.name);
         release(&ls.first_lock);
     }else {
         while (curr->next != NULL) {
@@ -901,7 +953,7 @@ void add(struct list ls, struct node * node){
             acquire(&proc[curr->proc_index].lock_linked_list);
         }
         curr->next = node;
-        printf("Debug proc_ind %d added to %s\n",curr->proc_index,ls.name);
+        printf("Debug proc_ind %d added to %s\n",node->proc_index,ls.name);
         release(&proc[curr->proc_index].lock_linked_list);
     }
 }
@@ -958,7 +1010,7 @@ int remove(struct list ls, struct node * node){
         } else
             release(&proc[pred->proc_index].lock_linked_list);
 
-        if(curr->proc_index == NPROC+1) printf("debug not good\n");
+        if(curr->proc_index == NPROC+1) panic("Debug proc ind in remove is NPROC+1!\n");
         release(&proc[curr->proc_index].lock_linked_list);
         return 1; // return success
     }
