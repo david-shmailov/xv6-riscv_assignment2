@@ -66,11 +66,11 @@ CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 &
 
 CFLAGS += -DOFF=0
 CFLAGS += -DON=1
-BLNCFLG := ON
+BLNCFLG := OFF
 CFLAGS += -DBLNCFLG=$(BLNCFLG)
 
 ifndef CPUS
-CPUS := 3
+CPUS :=3
 endif
 CFLAGS += -DCPUS=$(CPUS)
 

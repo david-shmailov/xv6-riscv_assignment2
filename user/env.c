@@ -23,11 +23,12 @@ main(int argc, char *argv[])
 {
     //cas_test();
     int pid1 = fork();
-    int pid2 = fork();
-    int pid3 = fork();
-    int pid4 = fork();
-    printf("pid %d started\n", getpid());
-    if(pid1 != 0 && pid2 != 0 && pid3 !=0 && pid4 !=0){ // fork returns pid for the father, and returns 0 for the child
+    int pid2 =fork();
+    int pid3 =fork();
+    int pid4 =fork();
+    int pid5 =fork();
+    int pid6 =fork();
+    if(pid1 == 0&&pid2 == 0&&pid3 == 00&&pid4 == 00&&pid5 == 00&&pid6 == 0){
         for(int i = 0; i < CPUS; i++){
             printf("CPU: %d has %d proccesses\n", i, cpu_process_count(i));
         }

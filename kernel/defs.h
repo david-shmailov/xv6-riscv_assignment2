@@ -109,7 +109,7 @@ void            procdump(void);
 struct list     init_linked_list(struct spinlock * lock, struct node * first, char* name);
 void            add(struct list ls, struct node * node);
 uint            pop(struct list ls);
-void            remove(struct list ls, struct node *node);
+int            remove(struct list ls, struct node *node);
 int             allocate_proc_to_cpu();
 int             set_cpu(int cpu_num);
 int             get_cpu(void);
