@@ -22,7 +22,7 @@ main()
     kvminithart();   // turn on paging
     procinit();      // process table
     trapinit();      // trap vectors
-    trapinithart();  // install kernel trap vector
+    trapinithart();  // install  vector
     plicinit();      // set up interrupt controller
     plicinithart();  // ask PLIC for device interrupts
     binit();         // buffer cache

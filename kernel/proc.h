@@ -18,6 +18,10 @@ struct context {
   uint64 s11;
 };
 
+struct list {
+    struct node *head;
+    struct spinlock * first_lock;
+};
 // Per-CPU state.
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
@@ -25,6 +29,7 @@ struct cpu {
   int noff;                   // Depth of push_off() nesting.
   int intena;                 // Were interrupts enabled before push_off()?
   int cpuid;
+  struct list * ls;
 };
 
 extern struct cpu cpus[NCPU];
@@ -116,7 +121,3 @@ struct proc {
   struct node * curr_proc_node;
 };
 
-struct list {
-    struct node *head;
-    struct spinlock first_lock;
-};
