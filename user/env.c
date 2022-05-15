@@ -9,12 +9,19 @@
 #include "kernel/memlayout.h"
 #include "kernel/riscv.h"
 
-
+void cas_test(){
+    printf("%d\n", getpid());
+    for(int i=0; i <4;i++){
+        int pid = fork();
+        if (pid != 0)
+            printf("%d\n", pid);
+    }
+}
 
 int
 main(int argc, char *argv[])
 {
-
+    //cas_test();
     int pid1 = fork();
     int pid2 =fork();
     int pid3 =fork();
@@ -26,8 +33,11 @@ main(int argc, char *argv[])
             printf("CPU: %d has %d proccesses\n", i, cpu_process_count(i));
         }
     }
-    for(int i=0; i<100; i++);
+    for(int i=0; i<100000; i++){
+        printf("");
+    }
+    printf("pid %d finished\n", getpid());
 
-    exit(-1);
+    exit(0);
     return 0;
 }
