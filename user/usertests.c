@@ -1764,10 +1764,9 @@ void
 manywrites(char *s)
 {
   int nchildren = 4;
-  int howmany = 30;//30; // increase to look for deadlock
-  
+  int howmany = 30; // increase to look for deadlock
+
   for(int ci = 0; ci < nchildren; ci++){
-      printf("debug main loop\n");
     int pid = fork();
     if(pid < 0){
       printf("fork failed\n");
@@ -1779,40 +1778,27 @@ manywrites(char *s)
       name[0] = 'b';
       name[1] = 'a' + ci;
       name[2] = '\0';
-        int my_debug_pid = getpid();
-        unlink(name);
-        printf("debug %d first unlink successful\n",my_debug_pid);
-
+      unlink(name);
 
       for(int iters = 0; iters < howmany; iters++){
-          printf("debug %d second loop\n",my_debug_pid);
         for(int i = 0; i < ci+1; i++){
-            printf("debug %d third loop\n",my_debug_pid);
           int fd = open(name, O_CREATE | O_RDWR);
-            printf("debug %d after open\n",my_debug_pid);
           if(fd < 0){
             printf("%s: cannot create %s\n", s, name);
             exit(1);
           }
           int sz = sizeof(buf);
           int cc = write(fd, buf, sz);
-            printf("debug %d after write\n", my_debug_pid);
           if(cc != sz){
             printf("%s: write(%d) ret %d\n", s, sz, cc);
             exit(1);
           }
-//            for (int w=0; w<100*i;w++){
-//                printf("");
-//            }
-            close(fd);
-            printf("debug %d after close\n",my_debug_pid);
+          close(fd);
         }
         unlink(name);
-        printf("debug %d inner unlink successful\n",my_debug_pid);
       }
 
       unlink(name);
-      printf("debug %d exiting\n",my_debug_pid);
       exit(0);
     }
   }
@@ -2844,14 +2830,14 @@ main(int argc, char *argv[])
     {truncate1, "truncate1"},
     {truncate2, "truncate2"},
     {truncate3, "truncate3"},
-    //{reparent2, "reparent2"}, //takes time
+    {reparent2, "reparent2"}, //takes time
     {pgbug, "pgbug" },
     {sbrkbugs, "sbrkbugs" },
     {badarg, "badarg" },
     {reparent, "reparent" },
     {twochildren, "twochildren"},
     {forkfork, "forkfork"},
-  //  {forkforkfork, "forkforkfork"},
+    //{forkforkfork, "forkforkfork"},
     {argptest, "argptest"},
     {createdelete, "createdelete"},
     {linkunlink, "linkunlink"},
@@ -2892,7 +2878,7 @@ main(int argc, char *argv[])
     {bigfile, "bigfile"},
     {dirfile, "dirfile"},
     {iref, "iref"},
- //   {forktest, "forktest"},
+    //{forktest, "forktest"},
     {bigdir, "bigdir"}, // slow
     { 0, 0},
   };

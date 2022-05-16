@@ -126,8 +126,10 @@ myproc(void) {
 int
 allocpid() {
     int pid;
+    int i = 0;
     do{
         pid = nextpid;
+        if( i++ > 10000) printf("allocpid\n");
     } while(cas(&nextpid, pid, pid+1));
 
     return pid;
@@ -136,16 +138,18 @@ allocpid() {
 int
 add_num_of_procs(int cpuid, int addition){
     int curr;
-    //int i = 0;
+    int i = 0;
     do{
-        //if(i++ > 1000) printf("nooooooooooo \n");
+        if(i++ > 1000) printf("add_num_of_procs \n");
         curr = num_of_procs[cpuid];
     } while(cas(&num_of_procs[cpuid],curr, curr + addition));
     return 0;
 }
 int
 add_num_of_procs_dec(int cpuid, int val_to_change){
+    int i =0 ;
     do{
+        if(i++ > 1000) printf("add_num_of_procs_dec \n");
         if(num_of_procs[cpuid]<val_to_change || val_to_change <= 1) return 0;
     } while(cas(&num_of_procs[cpuid],val_to_change, val_to_change - 1));
     return 1;
@@ -417,13 +421,13 @@ fork(void)
 
     pid = np->pid;
 
-    release(&np->lock);
+    //release(&np->lock);
 
     acquire(&wait_lock);
     np->parent = p;
-    release(&wait_lock);
 
-  acquire(&np->lock);
+
+  //acquire(&np->lock);
   int destination_cpu = -1; // I want it to crash and burn if the macros don't work!
   #if BLNCFLG==ON
   destination_cpu = min_num_of_procs();
@@ -438,7 +442,7 @@ fork(void)
   add(ls_ready_cpu[destination_cpu], np->curr_proc_node);
   add_num_of_procs(destination_cpu, 1);
   release(&np->lock);
-
+  release(&wait_lock);
   return pid;
 }
 
@@ -593,7 +597,7 @@ scheduler(void)
          }
         else{
             printf("here cant run it state %d \n", p->state);
-            add(ls_ready_cpu[p->cpus_affiliated],p->curr_proc_node);
+            //add(ls_ready_cpu[p->cpus_affiliated],p->curr_proc_node);
         }
         release(&p->lock);
   }
@@ -723,6 +727,15 @@ wakeup(void *chan)
                     p->state = RUNNABLE;
                     add(ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
                     add_num_of_procs(destination_cpu, 1);
+                }
+                else{
+                    printf("not succesed to remove %d\n", p->curr_proc_node->proc_index);
+                    struct node * tmp = ls_sleeping->head;
+                    while(tmp->next != NULL){
+                        printf("%d->", tmp->proc_index);
+                        tmp = tmp->next;
+                    }
+                    printf("%d\n", tmp->proc_index);
                 }
             }
             release(&p->lock);
