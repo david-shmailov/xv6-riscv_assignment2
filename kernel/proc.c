@@ -150,7 +150,6 @@ int
 add_num_of_procs_dec(int cpuid, int val_to_change){
     int i =0 ;
     do{
-        if(i++ > 1000) printf("add_num_of_procs_dec \n");
         if(num_of_procs[cpuid]<val_to_change || val_to_change <= 1) return 0;
     } while(cas(&num_of_procs[cpuid],val_to_change, val_to_change - 1));
     return 1;
