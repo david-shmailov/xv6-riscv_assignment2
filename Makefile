@@ -66,7 +66,7 @@ CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 &
 
 CFLAGS += -DOFF=0
 CFLAGS += -DON=1
-BLNCFLG := OFF
+BLNCFLG := ON
 CFLAGS += -DBLNCFLG=$(BLNCFLG)
 
 ifndef CPUS

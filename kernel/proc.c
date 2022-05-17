@@ -14,16 +14,16 @@ struct proc proc[NPROC];
 
 struct proc *initproc;
 struct spinlock unused;
-struct list * ls_unused ;
+struct list ls_unused ;
 struct node first_unused ;
 struct spinlock zombie;
-struct list * ls_zombie;
+struct list ls_zombie;
 struct node first_zombie;
 struct spinlock sleeping;
-struct list * ls_sleeping;
+struct list ls_sleeping;
 struct node first_sleeping;
 struct spinlock ready_cpu[CPUS];
-struct list * ls_ready_cpu[CPUS];
+struct list ls_ready_cpu[CPUS];
 struct node first_ready_cpu[CPUS];
 struct node nodes[NPROC];
 
@@ -66,14 +66,14 @@ procinit(void)
 {
     struct proc *p;
     initlock(&unused, "unused");
-    ls_unused = init_linked_list(&unused, &first_unused);
+     init_linked_list(&unused, &first_unused, &ls_unused);
     initlock(&zombie, "zombie");
-    ls_zombie = init_linked_list(&zombie,&first_zombie);
+     init_linked_list(&zombie,&first_zombie,&ls_zombie);
     initlock(&sleeping, "sleeping");
-    ls_sleeping = init_linked_list(&sleeping,&first_sleeping);
+     init_linked_list(&sleeping,&first_sleeping,&ls_sleeping);
     for(int i=0; i<CPUS; i++) {
         initlock(&ready_cpu[i], "ready_cpu[i]"+i);
-         ls_ready_cpu[i] = init_linked_list(&ready_cpu[i], &first_ready_cpu[i]);
+        init_linked_list(&ready_cpu[i], &first_ready_cpu[i], &ls_ready_cpu[i]);
         num_of_procs[i] = 0;
     }
     initlock(&pid_lock, "nextpid");
@@ -86,9 +86,10 @@ procinit(void)
         if((p->curr_proc_node = (struct node *)kalloc()) == 0){
             panic("this should not happend\n");
         }
+        p->curr_proc_node = &nodes[i];
         p->curr_proc_node->proc_index= i;
         p->curr_proc_node->next = NULL;
-        add(ls_unused,  p->curr_proc_node);
+        add(&ls_unused,  p->curr_proc_node);
         i++;
     }
 }
@@ -183,7 +184,7 @@ int steal_proc(int my_id){
             // remove from current cpu:
             if (add_num_of_procs_dec(cpuid,num_of_procs[cpuid])){ // if remove was successful
                 struct proc *p;
-                int proc_ind = pop(ls_ready_cpu[cpuid]);
+                int proc_ind = pop(&ls_ready_cpu[cpuid]);
                 if(proc_ind< NPROC) {
                     p = &proc[proc_ind];
                     // add to my cpu:
@@ -210,15 +211,16 @@ allocproc(void)
     struct proc *p;
 
     uint index_proc;
-    do {
-        index_proc = pop(ls_unused);
-    }while(index_proc > NPROC);
-    p = &proc[index_proc];
-    acquire(&p->lock);
-    if(p->state == UNUSED) {
-        goto found;
-    } else {
-        release(&p->lock);
+    index_proc = pop(&ls_unused);
+    if(index_proc< NPROC) {
+        p = &proc[index_proc];
+        acquire(&p->lock);
+        if (p->state == UNUSED) {
+            goto found;
+        } else {
+            release(&p->lock);
+            printf("cant pop %d\n", p->state);
+        }
     }
     return 0;
 
@@ -270,11 +272,13 @@ freeproc(struct proc *p)
     p->chan = 0;
     p->killed = 0;
     p->xstate = 0;
-    p->state = UNUSED;
-    if(remove(ls_zombie, p->curr_proc_node)) {
+    int i = 0;
+    while(!remove(&ls_zombie, p->curr_proc_node->proc_index)&& i++>10000);
+    if(p->state == ZOMBIE) {
+        p->state = UNUSED;
         p->curr_proc_node->next = NULL;
-        add(ls_unused, p->curr_proc_node);
-    }
+        add(&ls_unused, p->curr_proc_node);
+    }else {printf("cant delete %d \n", p->curr_proc_node->proc_index);}
 }
 
 // Create a user page table for a given process,
@@ -354,10 +358,11 @@ userinit(void)
     safestrcpy(p->name, "initcode", sizeof(p->name));
     p->cwd = namei("/");
 
-    p->state = RUNNABLE;
+
     p->cpus_affiliated =0;
+    p->state = RUNNABLE;
     p->curr_proc_node->next =NULL;
-    add(ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
+    add(&ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
     add_num_of_procs(p->cpus_affiliated, 1);
 
     release(&p->lock);
@@ -420,29 +425,27 @@ fork(void)
     safestrcpy(np->name, p->name, sizeof(p->name));
 
     pid = np->pid;
-
-    //release(&np->lock);
+    release(&np->lock);
 
     acquire(&wait_lock);
     np->parent = p;
+    release(&wait_lock);
 
-
-  //acquire(&np->lock);
-  int destination_cpu = -1; // I want it to crash and burn if the macros don't work!
-  #if BLNCFLG==ON
-  destination_cpu = min_num_of_procs();
-  #elif BLNCFLG==OFF
-  destination_cpu = p->cpus_affiliated;
-  #else
+    int destination_cpu = -1; // I want it to crash and burn if the macros don't work!
+    #if BLNCFLG==ON
+    destination_cpu = min_num_of_procs();
+    #elif BLNCFLG==OFF
+    destination_cpu = p->cpus_affiliated;
+    #else
     panic("Something is wrong with the macros!!");
-#endif
+    #endif
+  acquire(&np->lock);
   np->state = RUNNABLE;
   np->curr_proc_node->next=NULL;
   np->cpus_affiliated = destination_cpu;
-  add(ls_ready_cpu[destination_cpu], np->curr_proc_node);
+  add(&ls_ready_cpu[destination_cpu], np->curr_proc_node);
   add_num_of_procs(destination_cpu, 1);
   release(&np->lock);
-  release(&wait_lock);
   return pid;
 }
 
@@ -495,13 +498,13 @@ exit(int status)
     wakeup(p->parent);
 
   acquire(&p->lock);
-  p->curr_proc_node->next=NULL;
   p->xstate = status;
   p->state = ZOMBIE;
-  add(ls_zombie, p->curr_proc_node);
+  p->curr_proc_node->next=NULL;
+  add(&ls_zombie, p->curr_proc_node);
   add_num_of_procs(p->cpus_affiliated, -1); //todo they didnt say to update here but it makes sense
 
-    release(&wait_lock);
+  release(&wait_lock);
 
     // Jump into the scheduler, never to return.
     sched();
@@ -575,7 +578,7 @@ scheduler(void)
         // Avoid deadlock by ensuring that devices can interrupt.
         intr_on();
         do{
-                proc_index = pop(ls_ready_cpu[c->cpuid]);
+                proc_index = pop(&ls_ready_cpu[c->cpuid]);
                 #if BLNCFLG == ON
                 if (proc_index > NPROC)//if im empty, attempt to steal
                     proc_index = steal_proc(c->cpuid);
@@ -638,7 +641,7 @@ yield(void)
     acquire(&p->lock);
     p->state = RUNNABLE;
     p->curr_proc_node->next=NULL;
-    add(ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
+    add(&ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
     sched();
     release(&p->lock);
 }
@@ -680,14 +683,14 @@ sleep(void *chan, struct spinlock *lk)
 
     acquire(&p->lock);  //DOC: sleeplock
 
+
+    p->state = SLEEPING;
     p->curr_proc_node->next =NULL;
     p->chan = chan;
-    p->state = SLEEPING;
-    add(ls_sleeping, p->curr_proc_node);
+    add(&ls_sleeping, p->curr_proc_node);
     add_num_of_procs(p->cpus_affiliated, -1); //todo they didnt say to update here but it makes sensev
-    release(lk);
   // Go to sleep.
-
+    release(lk);
     sched();
 
     // Tidy up.
@@ -720,23 +723,14 @@ wakeup(void *chan)
                     panic("Something is wrong with the macros!!");
                 #endif
                    // printf("removing %d \n",p->curr_proc_node->proc_index);
-                if(remove(ls_sleeping,p->curr_proc_node)) {
-                   // printf("succesed to remove %d\n", p->curr_proc_node->proc_index);
-                    p->curr_proc_node->next = NULL;
-                    p->cpus_affiliated = destination_cpu;
-                    p->state = RUNNABLE;
-                    add(ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
-                    add_num_of_procs(destination_cpu, 1);
-                }
-                else{
-                    printf("not succesed to remove %d\n", p->curr_proc_node->proc_index);
-                    struct node * tmp = ls_sleeping->head;
-                    while(tmp->next != NULL){
-                        printf("%d->", tmp->proc_index);
-                        tmp = tmp->next;
-                    }
-                    printf("%d\n", tmp->proc_index);
-                }
+                   int i= 0;
+                while(!remove(&ls_sleeping,p->curr_proc_node->proc_index)&& i++>10000);
+                p->curr_proc_node->next = NULL;
+                p->cpus_affiliated = destination_cpu;
+                p->state = RUNNABLE;
+                add(&ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
+                add_num_of_procs(destination_cpu, 1);
+
             }
             release(&p->lock);
         }
@@ -759,7 +753,7 @@ kill(int pid)
                 // Wake process from sleep().
                 p->state = RUNNABLE;
                 p->curr_proc_node->next = NULL;
-                add(ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
+                add(&ls_ready_cpu[p->cpus_affiliated], p->curr_proc_node);
                 add_num_of_procs(p->cpus_affiliated, 1);
             }
             release(&p->lock);
@@ -873,12 +867,10 @@ struct node init_node(uint proc_index){
 }
 
 
-struct list * init_linked_list(struct spinlock * lock, struct node * first){
-    struct list * ls = (struct list *)kalloc();
-    struct node * first_node = (struct node *)kalloc();
-    first_node->proc_index= NPROC+1;
-    first_node->next =NULL;
-    ls->head = first_node;
+struct list * init_linked_list(struct spinlock * lock, struct node * first, struct list * ls){
+    first->proc_index= NPROC+1;
+    first->next =NULL;
+    ls->head = first;
     ls->first_lock =lock;
     return ls;
 }
@@ -899,14 +891,14 @@ void add(struct list * ls, struct node * node){
                 flag++;
                 release(ls->first_lock);
             } else {
-                release(&proc[curr->proc_index].lock_linked_list);
+                release(&(&proc[curr->proc_index])->lock_linked_list);
             }
             curr = tmp;
             //("acquire %d\n",curr->proc_index );
-            acquire(&proc[curr->proc_index].lock_linked_list);
+            acquire(&(&proc[curr->proc_index])->lock_linked_list);
         }
         curr->next = node;
-        release(&proc[curr->proc_index].lock_linked_list);
+        release(&(&proc[curr->proc_index])->lock_linked_list);
     }
 }
 
@@ -915,11 +907,11 @@ uint pop(struct list * ls){
     struct node * pred = ls->head;
     if(pred->next != NULL){
         struct node * curr = pred->next;
-        acquire(&proc[curr->proc_index].lock_linked_list);
+        acquire(&(&proc[curr->proc_index])->lock_linked_list);
         pred->next = curr->next;
         uint index= curr->proc_index;
         curr->next = NULL;
-        release(&proc[curr->proc_index].lock_linked_list);
+        release(&(&proc[curr->proc_index])->lock_linked_list);
         release(ls->first_lock);
         return index;
     }
@@ -929,7 +921,7 @@ uint pop(struct list * ls){
     }
 }
 
-int remove(struct list * ls, struct node * node){
+int remove(struct list * ls, uint index){
     acquire(ls->first_lock);
     struct node * pred = ls->head;
     int flag = 0;
@@ -938,35 +930,35 @@ int remove(struct list * ls, struct node * node){
         return 0; //return fail
     }
     struct node * curr = pred->next;
-    acquire(&proc[curr->proc_index].lock_linked_list);
-    while(curr != NULL && curr->proc_index != node->proc_index){
+    acquire(&(&proc[curr->proc_index])->lock_linked_list);
+    while(curr != NULL && curr->proc_index != index){
         if(flag == 0){
             flag++;
             release(ls->first_lock);
         }
         else {
-            release(&proc[pred->proc_index].lock_linked_list);
+            release(&(&proc[pred->proc_index])->lock_linked_list);
         }
         pred = curr;
         curr = curr->next;
         if(curr != NULL) {
-            acquire(&proc[curr->proc_index].lock_linked_list);
+            acquire(&(&proc[curr->proc_index])->lock_linked_list);
         }
     }
-    if(curr->proc_index == node->proc_index ) {
+    if(curr->proc_index == index ) {
         pred->next = curr->next;
         curr->next= NULL;
         if (flag == 0) {
             flag++;
             release(ls->first_lock);
         } else{
-            release(&proc[pred->proc_index].lock_linked_list);
+            release(&(&proc[pred->proc_index])->lock_linked_list);
         }
-        release(&proc[curr->proc_index].lock_linked_list);
+        release(&(&proc[curr->proc_index])->lock_linked_list);
         return 1; // return success
     }
     else{
-        release(&proc[pred->proc_index].lock_linked_list);
+        release(&(&proc[pred->proc_index])->lock_linked_list);
         return 0; // return fail
     }
 }
